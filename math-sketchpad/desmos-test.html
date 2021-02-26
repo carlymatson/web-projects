@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script src="https://www.desmos.com/api/v1.5/calculator.js?apiKey=dcb31709b452b1cf9dc26972add0fda6"></script>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+    }
+
+    #calculator1 {
+      position: absolute;
+      top: 10px;
+      bottom: 0;
+      left: 0;
+      right: 51%;
+    }
+
+    #calculator2 {
+      position: absolute;
+      top: 10px;
+      bottom: 0;
+      left: 51%;
+      right: 0;
+    }
+
+    #calculator-container {
+      position: relative;
+      width: 100%;
+      height: 400px;
+    }
+
+    #centerer {
+      position: relative;
+      width: 90%;
+      margin: auto;
+    }
+  </style>
+</head>
+<body>
+  <div id="centerer">
+    <div id="calculator-container">
+      <div id="calculator1"></div>
+      <div id="calculator2"></div>
+    </div>
+    <p>
+      Changes made to the calculator on the left will be immediately
+      mirrored to the calculator on the right.
+    </p>
+  </div>
+  <script >
+    var elt1 = document.getElementById('calculator1');
+    var calculator1 = Desmos.GraphingCalculator(elt1);
+    calculator1.setExpression({latex:'y=\\sin(x)'});
+    for (var i=0; i < 5; i++) {
+      calculator1.setExpression({latex:'(4,'+i+')'});
+    }
+
+    var elt2 = document.getElementById('calculator2');
+    calculator2 = Desmos.GraphingCalculator(elt2);
+    calculator2.setState(calculator1.getState());
+
+    function mirrorState () {
+      calculator2.setState(calculator1.getState());
+    }
+
+    calculator1.observeEvent('change', mirrorState);
+  </script>
+</body>
+</html>

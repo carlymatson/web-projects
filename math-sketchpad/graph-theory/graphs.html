@@ -1,0 +1,434 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <title> Graph Theory </title>
+  <link rel="stylesheet" href="../mathsketchpad.css">
+  <script type="text/javascript" src="../js/paper.js"></script>
+  <script type="text/paperscript" canvas="myCanvas">
+
+var hitOptions = {
+  fill: true,
+  stroke: false,
+  segments: false,
+  tolerance: 10
+}
+
+var nodeValues = {
+	style: {
+  	strokeColor: "black",
+  	fillColor: "blue",
+  	strokeWidth: 2,
+  },
+	shape: "Circle",
+	radius: 7
+}
+
+var edgeStyle = {
+  fillColor: null,
+  strokeColor: 'black',
+  strokeWidth: 2,
+  dashArray: null
+}
+
+var textStyle = {
+	strokeColor: 'black',
+  fillColor: 'black',
+	strokeWidth: '1',
+	fontFamily: 'Arial',
+  fontSize: '15px'
+}
+
+var labelOffset = new Point(8,-8);
+
+var backgroundLayer, contentLayer, controlLayer;
+var cursorDef, pointSymbol, nodeSymbol, arrowTipSymbol;
+var buttonNames, modeButtons, mode;
+var newPath, dragItem, newEdge;
+
+setGlobals();
+loadCanvas();
+
+var gridSize = 80;
+
+// Setting up a graph.
+var g1 = newGraph(true);
+
+function newGraph(directed) {
+	var nodes = new Group({name: "nodes"});
+  var edges = new Group({name: "edges"});
+  var g = new Group(edges, nodes);
+  g.isDirected = directed;
+  g.name = "graph";
+	return g;
+}
+
+function addNode(g, point, label) { // This function is more or less pointless
+  if (!label) {
+    label = String.fromCharCode(97 + g.children["nodes"].children.length);
+  }
+	//var newNode = nodeSymbol.place(point);
+  var newNode = labelify(nodeSymbol.place(point), label, labelOffset);
+	g.children["nodes"].addChild(newNode);
+  return newNode;
+}
+
+function addEdge(node1, node2, isDirected) {
+  while (node1.className == 'Group') {
+    node1 = node1.firstChild;
+  }
+  while (node2.className == 'Group') {
+    node2 = node2.firstChild;
+  }
+  var bounds1 = new Path.Rectangle(node1.bounds);
+  var bounds2 = new Path.Rectangle(node2.bounds);
+	var lineSeg = new Path([node1.position, node2.position]);
+  var pt1 = lineSeg.getIntersections(bounds1)[0];
+  var pt2 = lineSeg.getIntersections(bounds2)[0];
+  bounds1.remove();
+  bounds2.remove();
+  lineSeg.remove();
+  var newEdge = Path.Line(pt1.point,pt2.point);
+  if (isDirected) {
+    newEdge = arrowify(newEdge, 12);
+  }
+  newEdge.n1 = node1.id;
+	newEdge.n2 = node2.id;
+  return newEdge;
+}
+
+function updateEdges(g, node) {
+  while (node && node.className == 'Group') {
+    node = node.firstChild;
+  }
+	var edge, start, end, unitVec;
+	for (var i=0; i < g.children["edges"].children.length; i++) {
+		edge = g.children["edges"].children[i];
+		if (node && edge.n1 != node.id && edge.n2 != node.id) {
+			continue;
+		}
+    start = project.getItem({id: edge.n1});
+    end = project.getItem({id: edge.n2});
+    edge.remove();
+    edge = addEdge(start, end, g.isDirected);
+    g.children['edges'].insertChild(i, edge);
+	}
+}
+
+function onMouseDown(event) {
+  // Buttons
+  if (modeButtons.bounds.contains(event.point)) {
+    var indexClicked = Math.floor((event.point.y-modeButtons.bounds.top)/50); // Works like a charm.
+    setMode(buttonNames[indexClicked]);
+    return;
+  }
+  if (mode == "Nodes") {
+    newPath = nodeSymbol.place(event.point);
+    dragItem = newPath;
+		return;
+	}
+  var hitResult = project.hitTest(event.point, hitOptions);
+  if (!hitResult) {
+    return;
+  }
+  if (mode == "Edges" && hitResult.item.isDescendant(g1.children['nodes'])) {
+    newPath = new Path([event.point, event.point]);
+    var node1 = hitResult.item;
+    while (node1.className == 'Group') {
+      node1 = node1.firstChild;
+    }
+    newPath.n1 = node1;
+    newPath.style = edgeStyle;
+    newPath.sendToBack();
+    dragItem = newPath.lastSegment;
+    return;
+  } else if (mode == "Cursor") {
+    dragItem = hitResult.item;
+  }
+}
+
+function onMouseDrag(event) {
+  if (!dragItem)
+    return;
+  if (dragItem.hasLabel) {
+    dragItem = dragItem.parent;
+  }
+  if (dragItem.point) { // If dragItem is a segment of a path.
+    dragItem.point += event.delta;
+  } else { // If dragItem is a node.
+    dragItem.position += event.delta;
+    updateEdges(g1, dragItem);
+  }
+}
+
+function onMouseMove(event) {
+  project.deselectAll();
+  if (event.item) {
+    //event.item.selected = true;
+  }
+  modeButtons.selected = false;
+}
+
+function onMouseUp(event) {
+  if (mode=='Nodes' && newPath) {
+    var alphaLabel = String.fromCharCode(97 + g1.children['nodes'].children.length);
+    newPath = labelify(newPath, alphaLabel, labelOffset);
+    g1.children['nodes'].addChild(newPath);
+  } else if (mode=='Edges' && newPath) {
+    var alphaLabel = String.fromCharCode(97 + g1.children['nodes'].children.length);
+    // Determine whether the second node already exists.
+    var nodeHit = g1.children['nodes'].hitTest(event.point, hitOptions);
+    if (nodeHit) {
+      nodeHit = nodeHit.item;
+    }
+    while (nodeHit && nodeHit.className == 'Group') {
+      nodeHit = nodeHit.firstChild;
+    }
+    // Determine the second node.
+    var newNode;
+    if (nodeHit) {
+      newNode = nodeHit;
+    } else {
+      newNode = nodeSymbol.place(event.point);
+      newNode = labelify(newNode, alphaLabel, labelOffset);
+      g1.children['nodes'].addChild(newNode);
+    }
+    g1.children['edges'].addChild(addEdge(newPath.n1, newNode, g1.isDirected));
+    newPath.remove();
+  }
+  dragItem = newPath = null;
+}
+
+function loadCanvas() {
+  // Set symbols.
+	cursorDef = setCursorSymbol();
+	nodeSymbol = setNodeSymbol(nodeValues);
+  arrowTipSymbol = new SymbolDefinition(setArrowTip(12));
+	// Set background.
+  backgroundLayer = project.activeLayer;
+  backgroundLayer.name = 'background';
+	project.currentStyle = {fillColor: "white", strokeColor: "white", dashArray: null};
+	var whiteBackground = new Path.Rectangle(view.bounds);
+	whiteBackground.locked = true;
+  whiteBackground.sendToBack();
+	// Initialize starting layers and groups.
+  contentLayer = new Layer({name:"content"});
+	controlLayer = new Layer({name: "controls"});
+	// Create on-screen controls.
+  buttonNames = ["Nodes", "Edges", "Cursor"];
+	modeButtons = buttonBar(buttonNames);
+	mode = modeButtons.firstChild.name;
+	setMode(mode);
+  contentLayer.activate();
+}
+
+function labelify(item, label, offset) {
+  if (!offset) {
+    offset = new Point(10,-10);
+  }
+  var itemGroup = new Group(item);
+  var txt = new PointText({point: item.position+offset, content: label});
+  itemGroup.addChild(txt);
+  item.hasLabel = true;
+  txt.isLabel = true;
+  txt.style = textStyle;
+  return itemGroup;
+}
+
+function arrowify(myPath, arrowSize) {
+  if (!arrowSize) {
+    arrowSize = 12;
+  }
+	var point = myPath.lastSegment.point;
+	var vector = myPath.getTangentAt(myPath.length);
+  var thisArrowTip = setArrowTip(arrowSize);
+  thisArrowTip.applyMatrix = false;
+  myPath.hasArrow = true;
+  thisArrowTip.position += myPath.lastSegment.point;
+	thisArrowTip.rotate(vector.angle);
+	//return new CompoundPath({
+  //  children: [myPath, thisArrowTip],
+  //  style: edgeStyle,
+  //});
+  return new Group(myPath, thisArrowTip);
+}
+
+function setNodeSymbol(vals) {
+	var nodePath, nodeSym;
+	if (vals.shape == "Circle") {
+		nodePath = new Path.Circle(new Point(0,0), vals.radius);
+	} else if (vals.shape == "Rectangle") {
+		nodePath = new Path.Rectangle(new Point(0,0), vals.size);
+		if (vals.radius) {
+			nodePath = new Path.Rectangle(nodePath, vals.radius);
+		}
+	}
+	nodePath.style = vals.style;
+	nodeSym = new Symbol(nodePath);
+	return nodeSym;
+}
+
+function setCursorSymbol() {
+	project.currentStyle = edgeStyle;
+	var stem = new Path.Line(new Point(0,0), new Point(-8,-20));
+	var tangVec = stem.getTangentAt(stem.length);
+	var thisArrowTip = setArrowTip(12).rotate(tangVec.angle);
+	thisArrowTip.position = stem.lastSegment.point;
+	var arrowGroup = new Group([stem, thisArrowTip]);
+	arrowGroup.dashArray = null;
+	arrowGroup.scale(0.7);
+	var cursor = new SymbolDefinition(arrowGroup);
+	return cursor;
+}
+
+function setArrowTip(size) {
+  if (!size) {
+    size = 12;
+  }
+	var upperCorner = new Point(-Math.cos(Math.PI/8),Math.sin(Math.PI/8));
+	var lowerCorner = new Point(-Math.cos(Math.PI/8),-Math.sin(Math.PI/8));
+	var arrowTipPath = new Path([upperCorner*size, new Point(0,0), lowerCorner*size]);
+	arrowTipPath.strokeColor = "black";
+	//Optional: Closed path.
+	arrowTipPath.closePath();
+	// Optional: no fill.
+	arrowTipPath.fillColor = "black";
+  arrowTipPath.pivot = new Point(0,0);
+	arrowTipPath.dashArray = null;
+  arrowTipPath.applyMatrix = false;
+	return arrowTipPath;
+}
+
+function buttonBar(names) {
+  var horizontal = false;
+  var floatBottom = false;
+	var buttons = new Group();
+	var buttonSize = new Size(50,50);
+  var barOffset = new Point(25,25);
+	for (var i=0; i < names.length; i++) {
+		buttons.addChild(myButton(new Point(0,i*50), names[i], buttonSize));
+	}
+	var selectionBox = new Path.Rectangle(new Point(-25,-25), new Size(50,50));
+	selectionBox.strokeWidth = 5;
+	selectionBox.fillColor = null;
+	selectionBox.strokeColor = "#1259ff";
+	selectionBox.name = "select";
+	buttons.addChild(selectionBox);
+
+	var cursor1 = cursorDef.place(new Point(10,10)); // Could scale the cursor as well.
+	var path1 = nodeSymbol.place(new Point(2,-1)).scale(0.7);
+
+  var cursor2 = cursorDef.place(new Point(15,57)); // Position buttons relative to offset.
+  var path2 = nodeSymbol.place(new Point(-15,60)).scale(0.7);
+  var path2b = nodeSymbol.place(new Point(10,45)).scale(0.7);
+  project.currentStyle.strokeColor = "black";
+  project.currentStyle.fillColor = "black";
+  var path2c = arrowify(new Path.Line(path2.position, path2b.position), 11).scale(0.6);
+
+	var cursor3 = cursorDef.place(new Point(0,100));
+
+	buttons.addChildren([cursor1, path1, cursor2, path2, path2b, path2c, cursor3]);
+  buttons.position += barOffset;
+	return buttons;
+}
+
+function myButton(point, name, buttonSize) {
+	//Button content.
+	// Button background.
+	var background = new Path.Rectangle(point, buttonSize);
+  background.style = textStyle;
+	background.fillColor = "white";
+	// Create symbol, place it, and name it.
+	var buttonSym = new SymbolDefinition(new Group(background));
+	var button = buttonSym.place(point);
+	button.name = name;
+	return button;
+}
+
+function setMode(newMode) {
+	var indexStart = buttonNames.indexOf(mode);
+	var indexEnd = buttonNames.indexOf(newMode);
+	mode = newMode;
+	modeButtons.children["select"].tween({
+		'position.y': ['+=', 50*(indexEnd-indexStart)]
+	}, 200);
+	if (mode == "Nodes") {
+		project.currentStyle = nodeValues.style;
+	} else if (mode == "Edges") {
+  	project.currentStyle = edgeStyle;
+  }
+}
+
+function updateWindowDisplay() {
+	var dispStr = "String";
+	globals.setText(dispStr);
+}
+
+// Give the window access to things in the Paperscope.
+function setGlobals() {
+  globals.updateDisplay = updateWindowDisplay;
+	globals.refreshCanvas = function() {
+    project.clear();
+    loadCanvas();
+    g1 = newGraph(true);
+  };
+  globals.toggleDirected = function() {
+    g1.isDirected = !g1.isDirected;
+    updateEdges(g1, null);
+  };
+  globals.resizePaper = function() {
+    var background = backgroundLayer.children[0];
+    background.scale(view.bounds.width/background.bounds.width, view.bounds.height/background.bounds.height, new Point(0,0));
+  }
+}
+</script>
+<script type="text/javascript">
+window.globals = {
+  setText: function(displayString) {
+		document.getElementById("textDisplay").innerHTML = displayString;
+	},
+};
+window.onload = function() {
+  document.getElementById('refreshButton').onclick = function() {
+    window.globals.refreshCanvas();
+  };
+  document.getElementById('directedCheckbox').checked = 'true';
+  document.getElementById('directedCheckbox').onchange = function() {
+    window.globals.toggleDirected();
+  };
+};
+</script>
+</head>
+<body onresize="globals.resizePaper()">
+  <div class="topnav">
+    <a href="about.html">About</a>
+    <a href="braids.html">Braids</a>
+    <a href="commutative-diagram.html">Snake Lemma</a>
+    <a href="dihedral.html">Dihedral group</a>
+    <a href="graphs.html">Graph theory</a>
+    <a href="siegelPlane.html">Siegel Plane</a>
+    <a href="topology.html">Topology</a>
+  </div>
+  <div>
+<div class="row">
+  <div class="column side">
+    <h2>Graph Theory</h2>
+    <p>A <b>graph</b> consists of a set of nodes (or vertices, or points) and a set of edges between the nodes.
+      <br><br>
+    The positions of the nodes do not matter; the graph is determined by the nodes and how they are connected by edges.</p>
+    <h3>How to Use</h3>
+    <p> Use node mode to place nodes and edge mode to place edges. <br>
+      Click and drag while in cursor mode to adjust nodes and their labels.</p>
+		<h3>Settings</h3>
+    <input type="checkbox" id="directedCheckbox" name="isDirected" value="Directed">
+    <label for="isDirected"> Graph is directed </label><br>
+    <button id="refreshButton"> Refresh </button><br>
+    <p id='textDisplay'></p>
+  </div>
+  <div class="column middle" id="middleCol">
+	<canvas id="myCanvas" style="border:1px solid #000" width="600" height="500">
+		This text is displayed if your browser does not support HTML5.
+	</canvas>
+  </div>
+</body>
+</html>

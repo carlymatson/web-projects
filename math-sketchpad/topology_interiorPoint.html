@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html>
+<head>
+<script type="text/javascript" src="js/paper.js"></script>
+<script type="text/paperscript" canvas="myCanvas">
+
+var hitOptions = {
+	segments: true,
+	stroke: true,
+	fill: true,
+	tolerance: 5
+};
+
+openSetStyle = {
+	strokeColor: "black",
+	fillColor: "#03fc90",
+	strokeWidth: 2,
+	dashArray: [10,12]
+}
+
+pointStyle = {
+	strokeColor: "black",
+	fillColor: "black",
+	strokeWidth: 1,
+	dashArray: null,
+	fontSize: "20px"
+}
+
+setGlobals();
+
+var maxNumInputs = 1;
+var newCurve, newOpen, draggableItem;
+
+// Setting up the canvas layers and populating them.
+var opensFixed = new Layer({name: "Fixed opens"});
+project.currentStyle = openSetStyle;
+var setA = new Path.Circle(new Point(300,150), 80);
+setA.opacity = 0.4;
+opensFixed.locked = true;
+
+var openSets = new Layer({name: "Opens"});
+
+var points = new Layer({name: "Points"});
+points.style = pointStyle;
+var pointA = pointAt(100,150, "a");
+var pointB = pointAt(150,180, "b");
+var c = getRandomPoint();
+var pointC = pointAt(c.x,c.y,"c");
+points.locked = true;
+console.log(c);
+
+// Preparing to receive input.
+openSets.activate();
+project.currentStyle = openSetStyle;
+
+
+function getRandomPoint(set) {
+	if (!set) {
+		set = new Path(view.bounds);
+	}
+	var randPt = new Point(0,0);
+	while (!set.contains(randPt)) {
+		randPt = set.bounds.topLeft + set.bounds.size * Point.random();
+	}
+	return randPt;
+}
+
+function compareCurves(curve1, curve2) {
+	var area1 = curve1.getArea();
+	var area2 = curve2.getArea();
+	var c1c2 = curve1.intersect(curve2);
+	var a1a2 = c1c2.getArea();
+	c1c2.remove();
+	return Math.abs((a1a2/area1)*(a1a2/area2));
+}
+
+function areSeparated(ptA, ptB) {
+	for (var i=0; i<openSets.children.length; i++)  {
+		for (var j=0; j<openSets.children.length; j++) {
+			var aBool = openSets.children[i].contains(ptA);
+			var bBool = openSets.children[j].contains(ptB);
+			var intersectBool = i!= j && !openSets.children[i].intersects(openSets.children[j]);
+			if (aBool && bBool && intersectBool) {
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+function pointAt(x,y,label) {
+	points.activate();
+	var newPt = new  Point(x,y);
+	var ptPath = new Path.Circle(newPt, 3);
+	ptPath.name = "point-" + label;
+	var pointLabel = new PointText(newPt + new Point(10,10));
+	pointLabel.content = label;
+	points.style = pointStyle;
+	return newPt;
+}
+
+function onMouseDown(event) {
+	draggableItem = null;
+	newOpen = null;
+	if (newCurve) {
+		newCurve.selected = false;
+		newCurve = null;
+	}
+	var hitResult = project.hitTest(event.point, hitOptions);
+	if (!hitResult) {
+		if (event.modifiers.shift) {
+			newOpen = new Path.Circle(event.point, 5);
+			newOpen.opacity = 0.4;
+		} else {
+			newCurve = new Path({
+				segments: [event.point],
+				closed: true,
+				opacity: 0.6,
+				fillColor: "blue"
+			});
+		}
+		return;
+	}
+	draggableItem = hitResult.item;
+	if (hitResult.type == 'stroke') {
+		var location = hitResult.location;
+		var segment = draggableItem.insert(location.index + 1, event.point);
+		draggableItem.smooth();
+		draggableItem = segment;
+	} else if (hitResult.type == 'segment') {
+		draggableItem = hitResult.segment;
+	}
+}
+
+function onMouseMove(event) {
+	project.activeLayer.selected = false;
+	if (event.item)
+		event.item.selected = true;
+}
+
+function onMouseDrag(event) {
+	if (newOpen) {
+		var oldRadius = newOpen.bounds.width/2;
+		var newRadius = (event.point - event.downPoint).length;
+		if (newRadius != 0) {
+			newOpen.scale(newRadius/oldRadius);
+		}
+	}
+  if (newCurve) {
+		newCurve.add(event.point);
+	} else if (draggableItem) {
+		if (draggableItem.point) {
+			draggableItem.point += event.delta;
+		} else if (draggableItem.position) {
+			draggableItem.position += event.delta;
+		}
+	}
+}
+
+function onMouseUp(event) {
+	if (newCurve)  {
+		newCurve.simplify(3);
+	}
+	console.log("Points are separated: %s", areSeparated(pointA,pointB));
+	console.log(project.activeLayer.children);
+}
+
+function updateWindowDisplay() {
+	return;
+}
+
+function undo() {
+	console.log("Undo not implemented");
+	return;
+}
+
+function setGlobals() {
+  globals.updateDisplay = updateWindowDisplay;
+	globals.undo = undo;
+	globals.setFillColor = function(color) {
+		project.currentStyle.fillColor = color;
+	};
+	globals.setStrokeColor = function(color) {
+		project.currentStyle.strokeColor = color;
+	};
+	globals.setStrokeWidth = function(strokeWidth) {
+		project.currentStyle.strokeWidth = strokeWidth;
+	};
+}
+</script>
+<script type="text/javascript">
+window.globals = {
+  setText: function(displayString) {
+		document.getElementById("textDisplay").innerHTML = displayString;
+	},
+};
+window.onload = function() {
+  document.getElementById('undoBtn').onclick = function() {
+    window.globals.undo();
+  };
+	document.getElementById('fillColorInput').onchange = function() {
+    window.globals.setFillColor(document.getElementById('fillColorInput').value);
+  };
+	document.getElementById('strokeWidthInput').onchange = function() {
+    window.globals.setStrokeWidth(document.getElementById('strokeWidthInput').value);
+  };
+};
+</script>
+</head>
+<body>
+<div>
+	<canvas id="myCanvas" width="600" height="500" style="border:1px solid">
+		This text is displayed if your browser does not support HTML5.
+	</canvas>
+</div>
+<div>
+  <button id="undoBtn"> Undo </button>
+</div>
+<div>
+	<input type="color" id="strokeColorInput" value="#000000">
+	<label>Stroke color</label>
+</div>
+<div>
+	<input type="color" id="fillColorInput" value="#03fc90">
+	<label>Fill color</label>
+</div>
+<div>
+	<input type="range" id="strokeWidthInput" min=1 max=10 value=2>
+	<label>Stroke width</label>
+</div>
+<div>
+	  <p id="textDisplay"></p>
+</div>
+</body>

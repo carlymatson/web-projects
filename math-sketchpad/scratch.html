@@ -1,0 +1,66 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <title> Scratch </title>
+  <link rel="stylesheet" href="mathsketchpad.css">
+  <script type="text/javascript" src="js/paper.js"></script>
+  <script type="text/paperscript" canvas="myCanvas">
+
+
+var redDot = new Path.Circle(new Point(100,100), 15);
+redDot.fillColor = "red";
+redDot.onMouseDrag = function(event) {
+  this.position += event.delta;
+  console.log("Drag red dot");
+}
+function onMouseMove(event) {
+  console.log("Move");
+}
+
+function onMouseDown(event) {
+  console.log("Down");
+}
+
+function onMouseDrag(event) {
+  console.log("Drag");
+}
+
+function onMouseUp(event) {
+  console.log("Up");
+}
+
+</script>
+</head>
+<body>
+  <div class="topnav">
+    <a href="about.html">About</a>
+    <a href="braids.html">Braids</a>
+    <a href="commutative-diagram.html">Snake Lemma</a>
+    <a href="dihedral.html">Dihedral group</a>
+    <a href="graphs.html">Graph theory</a>
+    <a href="siegelPlane.html">Siegel Plane</a>
+    <a href="topology.html">Topology</a>
+  </div>
+<div class="row">
+  <div class="column side">
+    <h2>Dihedral group</h2>
+    <p>A <b>dihedral group</b> is the group of symmetries of a regular polygon.
+    <h3>How to Use</h3>
+    Click and drag to rotate the polygon. Click on the dashed lines to reflect.</p>
+    <h3>Settings</h3>
+    <div>
+    	<label>N: </label>
+    	<input type="number" min="3" max="10" id="numSidesInput">
+    	<button id="refreshButton"> Make N-gon </button>
+    	<p id="textDisplay"></p>
+    </div>
+  </div>
+<div class="column middle">
+	<canvas id="myCanvas" width="600" height="500" style="border:1px solid #000">
+		This text is displayed if your browser does not support HTML5.
+	</canvas>
+</div>
+</div>
+</body>
+</html>

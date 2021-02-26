@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html>
+<head>
+<script type="text/javascript" src="js/paper.js"></script>
+<script type="text/paperscript" canvas="myCanvas">
+
+var hitOptions = {
+	segments: true,
+	stroke: true,
+	fill: true,
+	tolerance: 5
+};
+
+var pointVals = {
+	color: "black",
+	radius: "3"
+}
+
+project.currentStyle = {
+	strokeColor: "black",
+	strokeWidth: 8
+}
+
+var newCurve;
+var myCurve;
+var draggableItem;
+
+setGlobals();
+
+function onMouseDown(event) {
+	draggableItem = myCurve = null;
+	if (newCurve) {
+		newCurve.selected = false;
+		newCurve = null;
+	}
+	var hitResult = project.hitTest(event.point, hitOptions);
+	if (!hitResult) {
+		newCurve = new Path({
+			segments: [event.point]
+		});
+		return;
+	}
+	myCurve = hitResult.item;
+	if (hitResult.type == 'segment') {
+		draggableItem = hitResult.segment;
+	} else if (hitResult.type == 'stroke') {
+		var loc = hitResult.location;
+		draggableItem = myCurve.insert(loc.index+1, event.point);
+		myCurve.smooth();
+	}
+}
+
+function onMouseDrag(event) {
+	if (draggableItem) {
+		if (draggableItem.point) {
+			draggableItem.point += event.delta;
+			return;
+		} else if (draggableItem.position) {
+			draggableItem.position += event.delta;
+			return;
+		}
+	}
+  if (newCurve) {
+		newCurve.add(event.point);
+		newCurve.smooth();
+	}
+}
+
+function onMouseUp(event) {
+	if (!newCurve)  {
+		return;
+	}
+	newCurve.closed = true;
+	newCurve.simplify(10);
+	newCurve.selected = true;
+	console.log(newCurve);
+	for (var i=0; i < newCurve.crossings.length; i++) {
+		var curve = newCurve.crossings[i].curve;
+		var buffPath = new Path([curve.segment1,curve.segment2]); // SEXY.
+		buffPath.strokeColor = "white";
+		buffPath.strokeWidth = 18;
+		buffPath.locked = true;
+		var buffPathInner = buffPath.clone();
+		buffPathInner.strokeColor = "black";
+		buffPathInner.strokeWidth = 8;
+		console.log(newCurve.crossings[i]);
+	}
+}
+
+function updateWindowDisplay() {
+	return;
+}
+
+function undo() {
+	console.log("Undo not implemented");
+	return;
+}
+
+function setGlobals() {
+  globals.updateDisplay = updateWindowDisplay;
+	globals.undo = undo;
+	globals.setFillColor = function(color) {
+		project.currentStyle.fillColor = color;
+	};
+	globals.setStrokeColor = function(color) {
+		project.currentStyle.strokeColor = color;
+	};
+	globals.setStrokeWidth = function(strokeWidth) {
+		project.currentStyle.strokeWidth = strokeWidth;
+	};
+}
+</script>
+<script type="text/javascript">
+window.globals = {
+  setText: function(displayString) {
+		document.getElementById("textDisplay").innerHTML = displayString;
+	},
+};
+window.onload = function() {
+  document.getElementById('undoBtn').onclick = function() {
+    window.globals.undo();
+  };
+	document.getElementById('fillColorInput').onchange = function() {
+    window.globals.setFillColor(document.getElementById('fillColorInput').value);
+  };
+	document.getElementById('strokeWidthInput').onchange = function() {
+    window.globals.setStrokeWidth(document.getElementById('strokeWidthInput').value);
+  };
+};
+</script>
+</head>
+<body>
+<div>
+	<canvas id="myCanvas" width="600" height="500" style="border:1px solid">
+		This text is displayed if your browser does not support HTML5.
+	</canvas>
+</div>
+<div>
+  <button id="undoBtn"> Undo </button>
+</div>
+<div>
+	<input type="color" id="strokeColorInput" value="#000000">
+	<label>Stroke color</label>
+</div>
+<div>
+	<input type="color" id="fillColorInput" value="#03fc90">
+	<label>Fill color</label>
+</div>
+<div>
+	<input type="range" id="strokeWidthInput" min=1 max=10 value=2>
+	<label>Stroke width</label>
+</div>
+<div>
+	  <p id="textDisplay"></p>
+</div>
+</body>

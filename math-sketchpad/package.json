@@ -1,0 +1,14 @@
+{
+  "name": "math-sketchpad",
+  "version": "1.0.0",
+  "description": "Interactive math graphics",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Caroline Matson",
+  "license": "ISC",
+  "dependencies": {
+    "paper": "^0.12.11"
+  }
+}

@@ -1,0 +1,534 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+<title> Topology Sketchpad </title>
+<link rel="stylesheet" href="mathsketchpad.css">
+<script type="text/javascript" src="js/paper.js"></script>
+<script type="text/paperscript" canvas="myCanvas">
+
+var hitOptions = {
+	fill: true,
+	stroke: true,
+	segments: true,
+	tolerance: 5
+}
+
+var openSetStyle = {
+	strokeColor: "black",
+	fillColor: new Color({ hue: 90, saturation: 1, lightness: 0.5, alpha: 0.4 }),
+	strokeWidth: 2,
+	dashArray: [8,8]
+}
+
+var pointValues = {
+	style: {
+		strokeColor: "black",
+		fillColor: "black",
+		strokeWidth: 2,
+		dashArray: null,
+		fontSize: "15px"
+	},
+	shape: "Circle",
+	radius: 3
+}
+
+var nodeValues = {
+	style: {
+		strokeColor: "black",
+		fillColor: "blue",
+		dashArray: null
+	},
+	shape: "Circle",
+	radius: 6
+}
+
+var textStyle = pointValues.style;
+var useRandomColor = true;
+var grid = null;//new Point(150,50);
+
+var onScreenControls, sets, curves, points; // Layers.
+var cursorSymDef, pointSymDef;
+var buttonNames, modeButtons, mode;
+var newPath, dragItem;
+
+setGlobals();
+loadCanvas();
+
+function loadCanvas() {
+	// Set background.
+	project.activeLayer.name = "Background";
+	project.currentStyle = {fillColor: "white", strokeColor: "white", dashArray: null};
+	var whiteBackground = new Path.Rectangle(view.bounds);
+	whiteBackground.locked = true;
+	// Initialize starting layers and groups.
+	sets = new Layer({name: "Opens"});
+	curves = new Layer({name: "Curves"});
+	points = new Layer({name: "Points"});
+	onScreenControls = new Layer({name: "Controls"});
+	// Set symbols.
+	cursorSymDef = setCursorSymbol();
+	pointSymDef = setnodeSymDef(pointValues);
+	// Create on-screen controls.
+  buttonNames = ["Discs", "Blobs", "Curves", "Points", "Cursor"];
+	modeButtons = buttonBar(buttonNames);
+	mode = modeButtons.firstChild.name;
+	setMode(mode);
+}
+
+function performChecks(nbhd) {
+	if (!nbhd) {
+		nbhd = sets.lastChild;
+	}
+	if (!nbhd) {
+		return;
+	}
+	var containsC = nbhd.contains(pointA);
+	var setMinus = nbhd.subtract(setA);
+	var inSetA = (setMinus.getArea() == 0);
+	console.log("Contains point: %s", containsC)
+	console.log("Is inside set: %s", inSetA);
+	setMinus.remove();
+}
+
+function getRandomPoint(mySet) {
+	if (!mySet) {
+		return;
+	}
+	var randPt = new Point(0,0);
+	while (!mySet.contains(randPt)) {
+		randPt = mySet.bounds.topLeft + mySet.bounds.size * Point.random();
+	}
+	return randPt;
+}
+
+function randomDisc() {
+	var r = 20 + 70*Math.random();
+	var center = new Point(50,50) + Point.random() * new Point(400,400);
+	return new Path.Circle(center, r);
+}
+
+function compareCurves(curve1, curve2) {
+	var area1 = curve1.getArea();
+	var area2 = curve2.getArea();
+	var c1c2 = curve1.intersect(curve2);
+	var a1a2 = c1c2.getArea();
+	c1c2.remove();
+	return Math.abs((a1a2/area1)*(a1a2/area2));
+}
+
+function areSeparated(ptA, ptB) {
+	for (var i=0; i<sets.children.length; i++)  {
+		for (var j=0; j<sets.children.length; j++) {
+			var aBool = sets.children[i].contains(ptA);
+			var bBool = sets.children[j].contains(ptB);
+			var intersectBool = i!= j && !sets.children[i].intersects(sets.children[j]);
+			if (aBool && bBool && intersectBool) {
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+function onMouseDown(event) {
+	dragItem = newPath = newPath = null;
+	var hitResult = project.hitTest(event.point, hitOptions); // Hit test button bar first?
+	// Button bar. Is it better to determine whether the click is in the bounds?
+	if (hitResult && hitResult.item.isDescendant(modeButtons)) {
+		var indexClicked = Math.floor((event.point.y-modeButtons.bounds.top)/50); // Works like a charm.
+		setMode(buttonNames[indexClicked]);
+		return;
+	}
+	if (mode == "Discs") {
+		sets.activate();
+		newPath = new Path.Circle({
+			center: event.point,
+			radius: 5,
+			style: openSetStyle
+		});
+		return;
+	}
+	if (mode == "Blobs"){
+		sets.activate();
+		newPath = new Path({
+			segments: [event.point],
+			closed: true,
+			style: openSetStyle,
+			isFlexible: true,
+		});
+		return;
+	}
+	if (mode == "Curves") {
+		curves.activate();
+		newPath = new Path({
+			segments: [event.point],
+			closed: false,
+			style: pointValues.style,
+			fillColor: null,
+			strokeWidth: 3,
+			isFlexible: true,
+		});
+		return;
+	}
+	if (mode == "Points") {
+		points.activate();
+		var alphaLabel = String.fromCharCode(97 + points.children.length);
+		var placedPoint = pointSymDef.place(event.point);
+		points.addChild(labelify(placedPoint, alphaLabel, new Point(5,-5))); // Wait to labelify until mouse up?
+	}
+	if (mode == "Cursor") {
+		if (!hitResult)
+		  return;
+		dragItem = hitResult.item;
+		if (!dragItem.isFlexible)
+		  return;
+		if (hitResult.type == 'stroke') { // Sledgehammer / shift to remove.
+			var location = hitResult.location;
+			var segment = dragItem.insert(location.index + 1, event.point);
+			dragItem.smooth();
+			dragItem = segment;
+		} else if (hitResult.type == 'segment') {
+			dragItem = hitResult.segment;
+		}
+		return;
+	}
+}
+
+function onMouseMove(event) {
+	project.deselectAll();
+	if (mode == "Cursor") {
+	  if (event.item) {
+			var highlighted = event.item;
+			while (highlighted.className == "Group") { // Highlight an individual item, rather than the whole group.
+				highlighted = event.item.hitTestAll(event.point)[0].item;
+			}
+		  highlighted.selected = true;
+			modeButtons.selected = false;
+		}
+	}
+}
+
+function onMouseDrag(event) {
+	// Add points.
+	if (newPath && newPath.isFlexible) {
+		newPath.add(event.point);
+	} else if (mode == "Discs" && newPath) {
+		// Scale disc(, rectangle, or ellipse).
+		var oldRadius = newPath.bounds.width/2;
+		var newRadius = (event.point - event.downPoint).length;
+		if (newRadius != 0) {
+			newPath.scale(newRadius/oldRadius);
+		}
+	} else if (mode == "Cursor" && dragItem) {
+		if (dragItem.hasLabel) {
+				dragItem = dragItem.parent;
+		}
+		dragShift(event, dragItem);
+		return;
+		//In some situations this should rotate instead.
+		//In some situations this should be handled as a braid strand.
+	}
+}
+
+function dragShift(event, item) {
+	if (item.className == "Segment") {
+		item.point += event.delta;
+	} else if (item.position) {
+		item.position += event.delta;
+	}
+}
+
+function dragRotate(event, item) {
+	var angle1 = (event.point - event.delta-item.pivot).angle;
+	var angle2 = (event.point-item.pivot).angle;
+	item.rotate(angle2/angle1);
+}
+
+function onMouseUp(event) {
+	if (newPath) {
+		if (newPath.isFlexible)
+		  newPath.simplify(5);
+		if (newPath.fillColor) {
+			var alphaLabel = String.fromCharCode(64 + sets.children.length);
+			globals.setText("Area of set " + alphaLabel + ": " + newPath.getArea().toFixed(2) + " pixels");
+			var alphaLabel = String.fromCharCode(64 + sets.children.length);
+			newPath = labelify(newPath, alphaLabel);
+			if (useRandomColor) {
+				openSetStyle.fillColor.hue = Math.random() * 360;
+				modeButtons.children['path1'].fillColor = modeButtons.children['path2'].fillColor = openSetStyle.fillColor;
+			}
+		}
+	} else if (dragItem) {
+		if (dragItem.className == "Segment") {
+			dragItem = dragItem.path;
+			dragItem.smooth();
+		}
+		if (grid && !dragItem.isLabel) {
+		  dragItem.position = (event.point/grid).round()*grid;
+		}
+	}
+	newPath = dragItem = null;
+}
+
+function setMode(newMode) {
+	var indexStart = buttonNames.indexOf(mode);
+	var indexEnd = buttonNames.indexOf(newMode);
+	mode = newMode;
+	modeButtons.children["select"].tween({
+		'position.y': ['+=', 50*(indexEnd-indexStart)]
+	}, 200);
+	if (mode == "Blobs" || mode == "Discs") {
+	  sets.activate();
+		project.currentStyle = openSetStyle;
+	}
+}
+
+function labelify(item, label, offset) {
+  if (!offset) {
+    offset = new Point(10,-10);
+  }
+  var itemGroup = new Group(item);
+  var txt = new PointText({point: item.position+offset, content: label});
+  itemGroup.addChild(txt);
+  item.hasLabel = true;
+  txt.isLabel = true;
+  txt.style = pointValues.style;
+	txt.strokeWidth = 1;
+  return itemGroup;
+}
+
+function setArrowTip(size, isFilled) {
+	if (!size)
+	  size = 12;
+	var upperCorner = new Point(-Math.cos(Math.PI/7),Math.sin(Math.PI/7));
+	var lowerCorner = new Point(-Math.cos(Math.PI/7),-Math.sin(Math.PI/7));
+	var arrowTipPath = new Path([upperCorner*size, new Point(0,0), lowerCorner*size]);
+	arrowTipPath.strokeColor = "black";
+	if (isFilled) {
+		arrowTipPath.fillColor = "black";
+	} else {
+		arrowTipPath.closePath();
+		arrowTipPath.fillColor = null;
+	}
+  arrowTipPath.pivot = new Point(0,0);
+	arrowTipPath.dashArray = null;
+	return arrowTipPath;
+}
+
+function setCursorSymbol() {
+	project.currentStyle = pointValues.style;
+	var stem = new Path.Line(new Point(0,0), new Point(-8,-20));
+	var tangVec = stem.getTangentAt(stem.length);
+	var thisArrowTip = setArrowTip(12, true).rotate(tangVec.angle);
+	thisArrowTip.position = stem.lastSegment.point;
+	var arrowGroup = new Group([stem, thisArrowTip]);
+	arrowGroup.dashArray = null;
+	arrowGroup.scale(0.7);
+	var cursor = new SymbolDefinition(arrowGroup);
+	return cursor;
+}
+
+function setnodeSymDef(vals) { // Takes a shape, style, and optional radius.
+	var nodePath, nodeSymDef;
+	if (vals.shape == "Circle") {
+		nodePath = new Path.Circle(new Point(0,0), vals.radius);
+	} else if (vals.shape == "Rectangle") {
+		nodePath = new Path.Rectangle(new Point(0,0), vals.size);
+		if (vals.radius) {
+			nodePath = new Path.Rectangle(nodePath, vals.radius);
+		}
+	}
+	nodePath.style = vals.style;
+	nodeSymDef = new Symbol(nodePath);
+	return nodeSymDef;
+}
+
+function squiggleIcon(closedLoop) {
+	var squiggle = new Path([new Point(0,0), new Point(7,-30), new Point(14,-20), new Point(21,-35), new Point(28,-20)]);
+	squiggle.smooth();
+	if (closedLoop) {
+		squiggle.closePath();
+	} else if (squiggle.closed == true){
+		squiggle.splitAt(0);
+		squiggle.lastSegment.point += new Point(40,20);
+	}
+	return squiggle;
+}
+
+function myButton(point, name, buttonSize) { // Re-do, utilising object constructors.
+	//Button content.
+	var text;
+	if (false) {
+		text = new PointText(point + buttonSize/2);
+		text.content = name;
+		text.justification = 'center';
+		text.style = pointValues.style;
+		text.strokeWidth = 1;
+	}
+	// Button background.
+	var background = new Path.Rectangle(point, buttonSize);
+	background.style = pointValues.style;
+	background.fillColor = "white";
+	// Create symbol, place it, and name it.
+	var buttonGroup = new Group(background, text);
+	var buttonSym = new SymbolDefinition(buttonGroup);
+	var button = buttonSym.place(point);
+	button.name = name;
+	return button;
+}
+
+function buttonBar(names) {
+	var buttons = new Group();
+	var buttonSize = new Size(50,50);
+	for (var i=0; i < names.length; i++) {
+		buttons.addChild(myButton(new Point(50,50+i*50), names[i], buttonSize));
+	}
+	var selectionBox = new Path.Rectangle(new Point(25,25), new Size(50,50));
+	selectionBox.strokeWidth = 5;
+	selectionBox.fillColor = null;
+	selectionBox.strokeColor = "#1259ff";
+	selectionBox.name = "select";
+	buttons.addChild(selectionBox);
+	project.currentStyle = openSetStyle;
+	var cursor1 = cursorSymDef.place(new Point(65,60));
+	var path1 = new Path.Circle(new Point(45,50),15);
+	path1.style = openSetStyle;
+	path1.name='path1';
+
+	var cursor2 = cursorSymDef.place(new Point(65,110));
+	var path2 = squiggleIcon(true);
+	path2.style = openSetStyle;
+	path2.name='path2';
+	path2.position += new Point(32,120);
+
+	var cursor3 = cursorSymDef.place(new Point(65,160));
+	var path3 = squiggleIcon(false);
+	path3.style = textStyle;
+	path3.fillColor = null;
+	path3.position += new Point(32,170);
+
+	var cursor4 = cursorSymDef.place(new Point(57,207));
+	var path4 = pointSymDef.place(new Point(50,195));
+
+	var cursor5 = cursorSymDef.place(new Point(50,250));
+
+	buttons.addChildren([cursor1, path1, cursor2, path2, cursor3, path3, cursor4, path4, cursor5]);
+	buttons.position += new Point(-25,-25);
+	return buttons;
+}
+
+function updateWindowDisplay() {
+	return;
+}
+
+function undo() {
+	console.log("Undo not implemented");
+	return;
+}
+
+function setGlobals() {
+  globals.updateDisplay = updateWindowDisplay;
+	globals.undo = undo;
+	globals.refreshCanvas = function() {
+		project.clear();
+		loadCanvas();
+	}
+	globals.setFillColor = function(color) {
+		project.currentStyle.fillColor = color;
+	};
+	globals.setStrokeColor = function(color) {
+		project.currentStyle.strokeColor = color;
+	};
+	globals.setStrokeWidth = function(strokeWidth) {
+		project.currentStyle.strokeWidth = strokeWidth;
+	};
+	globals.setNum  =  function(n) {
+		//values.num =  n;
+		return;
+	};
+	globals.resizePaper = function() {
+    var background = project.layers["Background"].children[0];
+    background.scale(view.bounds.width/background.bounds.width, view.bounds.height/background.bounds.height, new Point(0,0));
+  }
+}
+</script>
+<script type="text/javascript">
+window.globals = {
+  setText: function(displayString) {
+		document.getElementById("textDisplay").innerHTML = displayString;
+	},
+};
+window.onload = function() {
+  document.getElementById('undoBtn').onclick = function() {
+    window.globals.undo();
+  };
+	document.getElementById('strokeColorInput').onchange = function() {
+    window.globals.setStrokeColor(document.getElementById('strokeColorInput').value);
+  };
+	document.getElementById('fillColorInput').onchange = function() {
+    window.globals.setFillColor(document.getElementById('fillColorInput').value);
+  };
+	document.getElementById('strokeWidthInput').onchange = function() {
+    window.globals.setStrokeWidth(document.getElementById('strokeWidthInput').value);
+  };
+	document.getElementById('refreshButton').onclick = function() {
+    window.globals.refreshCanvas(document.getElementById('numStrandsInput').value);
+  };
+	document.getElementById('numStrandsInput').value = globals.numStrands;
+};
+</script>
+</head>
+<body onresize="globals.resizePaper()">
+	<div class="topnav">
+		<a href="about.html">About</a>
+		<a href="braids.html">Braids</a>
+		<a href="commutative-diagram.html">Snake Lemma</a>
+		<a href="dihedral.html">Dihedral group</a>
+    <a href="graphs.html">Graph theory</a>
+		<a href="siegelPlane.html">Siegel Plane</a>
+	  <a href="topology.html">Topology</a>
+	</div>
+	<div>
+<div class="row">
+	<div class="column side">
+		<h2>Topology Sketchpad</h2>
+		<p>Draw points, curves, and open sets.</p>
+		<h3>How to Use</h3>
+		<p>Use modes to:</p>
+			<ul>
+        <li>Sketch open discs</li>
+        <li>Sketch general open sets (blobs)</li>
+        <li>Sketch curves</li>
+				<li>Place points</li>
+				<li>Shift objects and labels</li>
+				<li>Adjust shapes of blobs and curves</li>
+    </ul>
+		<br>
+	  <p>We can also compute set areas, curve lengths, intersections, unions, and more.</p>
+		<p id="textDisplay">Area of newest set: n/a</p>
+		<br>
+		<button id="refreshButton"> Refresh </button>
+		<div style="display:none">
+			<h2> Settings</h2>
+			<label>Stroke color</label>
+			<input type="color" id="strokeColorInput" value="#000000">
+			<br>
+			<label>Fill color</label>
+			<input type="color" id="fillColorInput" value="#03fc90">
+			<br>
+			<label>Stroke width</label>
+			<input type="range" id="strokeWidthInput" min=1 max=10 value=2>
+			<br>
+		  <label>n: </label>
+		  <input type="number" min="3" max="7" id="numStrandsInput">
+		  <br>
+		  <button id="undoBtn"> Undo </button>
+	  </div>
+	</div>
+	<div class="column middle">
+	<canvas id="myCanvas"  resize="true" style="border:1px solid #000">
+		This text is displayed if your browser does not support HTML5.
+	</canvas>
+</div>
+</body>

@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Commutative Diagrams</title>
+  <link rel="stylesheet" href="mathsketchpad.css">
+  <script type="text/javascript" src="js/paper.js"></script>
+  <script type="text/paperscript" canvas="myCanvas">
+
+
+var hitOptions = {
+  fill: true,
+	stroke: true,
+	segments: true,
+  tolerance: 5
+}; // Styles and values should be defined in CD and annotation graph creators.
+var textStyle = {
+  fillColor: "black",
+  strokeColor: "black",
+  strokeWidth: "1",
+	fontFamily: "Arial",
+	fontSize: "15px"
+} // Put these into load canvas? Maybe split load canvas into two functions?
+var nodeStyle = {
+	fillColor: "white",
+	strokeColor: null,
+  strokeWidth: 1,
+	shadowColor: "#7f8182",
+  shadowBlur: 10,
+  shadowOffset: new Point(15, 10)
+}
+var nodeSymbol = new SymbolDefinition(new Path.Circle({
+    radius: 15,
+    style: nodeStyle,
+}));
+
+var backgroundLayer, contentLayer;
+var newPath, newEdge; //Probably redundant.
+var myCD;
+
+var snakeLemmaDiagram = [["", "0", "0", "0", ""],
+                         ["0", "ker(a)", "ker(b)", "ker(c)", ""],
+                         ["0", "A", "B", "C", "0"],
+                         ["0", "A'", "B'", "C'", "0"],
+                         ["", "coker(a)", "coker(b)", "coker(c)", ""],
+                         ["", "0", "0", "0", ""]
+                      ];
+
+loadCanvas();
+
+var num_named_elements = 0;
+
+var annGraph = newGraph({
+  edgeStyle: {
+    strokeColor: "green",
+    strokeWidth: 1,
+  },
+  labelStyle: {
+    strokeColor: "green",
+    fontSize: "12px",
+  },
+  arrowFill: false, //These are all still elements of the edge style.
+  isDirected: true,
+  hasCrossbars: true,
+  arrowSize: 8,
+  nodeMouseEvents: {
+    onMouseDown: onMouseDownAnnotation,
+    onMouseDrag: onMouseDragAnnotation,
+    onMouseUp: onMouseUpAnnotation,
+  },
+});
+annGraph.shift = new Point(20,20);
+
+var startNode;
+
+// These need to be attached to EVERY new node placed into annGraph.
+function onMouseDownAnnotation(event) {
+  startNode = null;
+  startNode = annGraph.getNodeAt(event.point, 20);
+  if (!startNode) {
+    console.log("Didn't find a starting node.");
+    return;
+  }
+  //console.log(startNode.data.label, startNode.data.kerDown, startNode.data.kerRight);
+  //var redDot = new Path.Circle(event.point, 3);
+  //redDot.fillColor = "red";
+  console.log("Start node: " + startNode.data.label);
+  console.log("Kernels: " + startNode.data.kerDown + ", " + startNode.data.kerRight);
+  project.currentStyle = annGraph.edgeStyle;
+  //newPath = lineSegment(startNode, startNode.position + new Point(5,5));
+  newPath = new Path([event.point, event.point]);
+  this.onMouseDrag = onMouseDragAnnotation;
+}
+function onMouseDragAnnotation(event) {
+  if (event.modifiers.alt) {
+    annGraph.position += event.delta;
+    return;
+  }
+  if (!newPath) {
+    return;
+  }
+  newPath.firstSegment.point = boundaryPoint(startNode, event.point);
+  newPath.lastSegment.point += event.delta;
+}
+function onMouseUpAnnotation(event) {
+  // If the rounded point is valid (given kernel considerations) then we neeed to:
+  // (1) determine whether there is a node there, if not make one
+  // (2) determine whether rounded point is valid
+  // (3) determine label
+  // (4) set kernels
+  // (5) adjust downstream nodes.
+  this.onMouseDrag =  null;
+  if (!startNode) {
+    return;
+  }
+  startNode.onMouseDrag = null;
+  var newNode, inKerDown, inKerRight, reverse;
+  //var newLabel = "#";
+  var newLabel = String.fromCharCode(97+num_named_elements);
+  num_named_elements += 1;
+  var vec = (event.point+annGraph.shift-startNode.position);
+  var gridDelta = (vec/myCD.grid).round();
+  //var gridDelta = (vec/this.data.grid).round();
+  var roundedPoint = gridDelta*myCD.grid + startNode.position;
+  var cdNode = myCD.getNodeAt(roundedPoint - annGraph.shift, 10);
+  if (!cdNode) {
+    console.log("No module.");
+    newPath.remove();
+    return;
+  }
+  if (cdNode.data.label === "0") {
+    newLabel = "0";
+    inKerDown = true;
+    inKerRight = true;
+  }
+  if (gridDelta == new Point(1,0)) {
+    console.log("Right arrow.");
+    // If either of these is true, the other should be as well.
+    if (newLabel === "0") {
+      startNode.data.kerRight = true;
+    }
+    if (startNode.data.kerRight) {
+      newLabel = "0";
+    }
+    // New node is in image, so it is in next kernel.
+    inKerRight = true;
+  } else if (gridDelta == new Point(0,1)) {
+    console.log("Down arrow.");
+    //If either of these is true, the other is as well.
+    if (newLabel === "0") {
+      startNode.data.kerDown = true;
+    }
+    if (startNode.data.kerDown) {
+      newLabel = "0";
+    }
+    // New node is in image, so it is in next kernel.
+    inKerDown = true;
+  } else if (startNode.data.kerRight && gridDelta == new Point(-1,0)) {
+    console.log("Left arrow.");
+    if (startNode.nextSibling.content === "0") {
+      console.log("Pulling back zero.");
+      inKerRight = true;
+    }
+    newLabel += "+" + String.fromCharCode(916);
+    startNode.inKerRight = true;
+    // If this wasn't already the case, we'll need to update its "down stream". Or could they do it manually?
+    reverse = true;
+  } else if (startNode.data.kerDown && gridDelta == new Point(0,-1)) {
+    console.log("Up arrow.");
+    if (startNode.nextSibling.content === "0") {
+      console.log("Pulling back zero.");
+      inKerDown = true;
+    }
+    newLabel += "+" + String.fromCharCode(916);
+    startNode.inKerDown = true;
+    reverse = true;
+  } else {
+    console.log("Invalid arrow direction.");
+    newPath.remove();
+    return;
+  }
+  if (newLabel === "0") {
+    num_named_elements -= 1;
+    inKerDown = true;
+    inKerRight = true;
+  }
+  var nodeHit = annGraph.getNodeAt(roundedPoint, 20);
+  // Create new node, if needed.
+  if (nodeHit) {
+    newNode = nodeHit;
+    if (newLabel === "0") {
+      newNode.nextSibling.content = "0";
+      newNode.label = "0";
+    }
+  } else {
+    annGraph.addNode(roundedPoint, newLabel);
+    newNode = annGraph.getNodeAt(roundedPoint, 10);
+  }
+  newNode.data.kerDown = inKerDown;
+  newNode.data.kerRight = inKerRight;
+  // Not done: fixing the downstream.
+  if (reverse) {
+    annGraph.addEdge(newNode, this);
+  } else {
+    annGraph.addEdge(this, newNode);
+  }
+  if (newPath) {
+    newPath.remove();
+  }
+}
+
+//function onMouseMove() {
+  //console.log("Move");
+  //startNode = null;
+//}
+
+
+function newAnnotationGraph() { // Not implemented. Graph values must be updated.
+  var baseDiagram; // Use this for the grid.
+  var myValues = {
+    nodeValues: {
+      symbol: null,
+      mouseEvents: (args ? args.nodeMouseEvents : null),
+    },
+    labelValues: {
+      style: {
+        strokeColor: "green",
+        fontSize: "10px",
+        fontFamily: "Arial",
+      },
+      locked: false,
+    },
+    edgeValues: {
+      style: {
+        strokeColor: "green",
+        strokeWidth: 1,
+        fill: null,
+      },
+      isDirected: true, // Get rid of this and replace with arrowSize.
+      arrowFill: false,
+      arrowSize: 8,
+      hasCrossbars: true, // Should this and directed be combined with their sizes? Then zero reads as falsy.
+    },
+  }
+}
+function commutativeDiagram(rows) {
+  var cdNodeIDarray = [];
+  var nodeArray = [];
+  cd = newGraph({
+      nodeSymbol: null,
+      isDirected: true,
+      edgeStyle: {
+        strokeColor: "black",
+        strokeWidth: 2,
+      },
+      arrowFill: false,
+      grid: new Size(100,70),
+      lockLabels: true,
+      hasCrossbars: false,
+    });
+  for (var j=0; j < rows.length; j++) {
+    var rowIDs = [];
+    var nodeRow = [];
+    var prevNode = null;
+    for (var i=0; i < 5; i++) {
+      if (!rows[j][i]) {
+        rowIDs.push(0);
+        nodeRow.push(null);
+        continue;
+      }
+      var newNode = cd.addNode(new Point(i+1, j+1)*cd.grid, rows[j][i]);
+      if (rows[j][i]==="0") {
+        newNode.isZeroMod = true;
+      }
+      rowIDs.push(cd.eldestDescendant(newNode).id);
+      nodeRow.push(newNode);
+      // Edges.
+      if (prevNode && (j==2 || j==3) && i > 0 && i < 5) {
+        cd.addEdge(prevNode, newNode);
+      }
+      if ((i > 0 && i < 4) && j > 0  && j <= 5) {
+        if (cdNodeIDarray[j-1][i]) {
+          var upNode = project.getItem({id: cdNodeIDarray[j-1][i]});
+          cd.addEdge(upNode, newNode);
+        }
+      }
+      prevNode = newNode;
+    }
+    cdNodeIDarray.push(rowIDs);
+    nodeArray.push(nodeRow);
+  }
+  cd.ids = cdNodeIDarray;
+  cd.nodArr = nodeArray;
+  return cd;
+}
+
+// Args: nodeSymbol, edgeStyle, isDirected, arrowFill, hasCrossbars, lockLabels, grid
+function newGraph(args) {
+	var nodes = new Group({name: "nodes"});
+  var edges = new Group({name: "edges"});
+
+  function addNode(point, label) {
+    if (!label) {
+      label = String.fromCharCode(97 + this.children["nodes"].children.length);
+    }
+    var nodeSym;
+    if (this.nodeSymbol) {
+      nodeSym = this.nodeSymbol;
+    } else {
+      nodeSym = new SymbolDefinition(new Path.Rectangle({
+        point: new Point(0,0),
+        size: new Size(7.5*label.length+10, 25),
+        strokeColor: null,
+        fillColor: null,
+        strokeWidth: 1
+      }));
+    }
+    var newNode = labelify(nodeSym.place(point), label, {
+      shift: new Point(0,5),
+      lockLabel: this.lockLabels,
+      labelStyle: this.labelStyle ? this.labelStyle : null,
+    });
+    if (this.nodeMouseEvents) {
+      var evs = this.nodeMouseEvents;
+      newNode.onMouseDown = evs.onMouseDown ? evs.onMouseDown : null;
+      //newNode.onMouseDrag = evs.onMouseDrag ? evs.onMouseDrag : null;
+      newNode.onMouseUp = evs.onMouseUp ? evs.onMouseUp : null;
+    }
+    //newNode.data.label = label;
+    newNode.firstChild.data.label = label;
+    this.children["nodes"].addChild(newNode);
+    return newNode;
+  }
+  function getNodeAt(point, tolerance) {
+    var tol = tolerance ? tolerance : 20;
+    var nodeHit = this.children["nodes"].hitTest(point, {
+      tolerance: tol,
+      fill: true,
+      stroke: true,
+      class: PointText,
+    });
+    if (!nodeHit || !nodeHit.item) {
+      return null;
+    }
+    return nodeHit.item.parent.firstChild;
+  }
+
+  function addEdge(node1, node2) {
+    var nodes = [node1, node2];
+    project.currentStyle = this.edgeStyle;
+    var newEdge = lineSegment(node1, node2);
+    if (this.isDirected) {
+      newEdge = arrowify(newEdge, {
+        arrowFill: this.arrowFill,
+        arrowSize: this.arrowSize
+      });
+      if (this.hasCrossbars) {
+        newEdge = tickify(this.eldestDescendant(newEdge));
+      }
+      //newEdge = labelify(eldestDescendant(newEdge), "f", {curveLoc: 0.3});
+    }
+    for (var i=0; i<2; i++) {
+      while (nodes[i].children) {
+        nodes[i] = nodes[i].firstChild;
+      }
+    }
+    newEdge.n1 = nodes[0].id;
+    newEdge.n2 = nodes[1].id;
+    this.children["edges"].addChild(newEdge);
+    return newEdge;
+  }
+  function updateEdges(node) {
+    var g = this;
+    node = this.eldestDescendant(node);
+    for (var i=0; i < g.edges.length; i++) {
+      var edge = g.edges[i];
+      if (node && edge.n1 != node.id && edge.n2 != node.id) {
+        continue;
+      }
+      var start = project.getItem({id: edge.n1});
+      var end = project.getItem({id: edge.n2});
+      while (edge.children)
+        edge = edge.firstChild;
+      edge.lastSegment.point = boundaryPoint(end, edge.lastSegment.previous.point);
+      edge.firstSegment.point = boundaryPoint(start, edge.firstSegment.next.point);
+      updateDecorations(edge);
+    }
+  }
+  function eldestDescendant(item) {
+    if (!item)
+      return null;
+    if (item.isChild(this.children["nodes"]) || item.isChild(this.children["edges"])) {
+      return item;
+    }
+    while (item.children)
+      item = item.firstChild;
+    return (item.parent).firstChild;
+  }
+
+  var data = {
+    nodes: nodes.children,
+    edges: edges.children,
+    nodeValues: args ? args.nodeValues : null, // Args: symbol, mouseEvents
+    edgeValues: args ? args.edgeValues : null, // Args: style, isDirected, arrowFill, arrowSize, hasCrossbars
+    labelValues: args ? args.labelValues : null, // Args: style, locked
+    //grid: (args ? args.grid : null), // Maybe not? Most graphs won't use grids.
+    addNode: addNode,
+    getNodeAt: getNodeAt,
+    addEdge: addEdge,
+    updateEdges: updateEdges,
+    eldestDescendant: eldestDescendant, // I don't like it.
+  };
+  var g = new Group({
+    children: [edges, nodes],
+    //data: data,
+    nodes: nodes.children,
+    edges: edges.children,
+    nodeSymbol: (args ? args.nodeSymbol : null),
+    labelStyle: (args ? args.labelStyle : null),
+    edgeStyle: (args ? args.edgeStyle : null),
+    isDirected: (args ? args.isDirected : null),
+    arrowFill: (args ? args.arrowFill : null),
+    arrowSize: (args ? args.arrowSize : null),
+    hasCrossbars: (args ? args.hasCrossbars : null),
+    lockLabels: (args ? args.lockLabels : null),
+    grid: (args ? args.grid : null),
+    addNode: addNode,
+    addEdge: addEdge,
+    updateEdges: updateEdges,
+    getNodeAt: getNodeAt,
+    eldestDescendant: eldestDescendant,
+    nodeMouseEvents: (args ? args.nodeMouseEvents : null),
+  });
+	return g;
+}
+
+// Labels, arrows, and ticks, oh my!
+function updateDecorations(edge) {
+  for (var i=1; i < edge.parent.children.length; i++) {
+    var decor = edge.parent.children[i];
+    var newPt = (decor.curveLoc || decor.curveLoc == 0) ?
+                edge.getPointAt(decor.curveLoc*edge.length) : edge.position;
+    if (decor.point) { // Decor is PointText label.
+      var shift = decor.shift ? decor.shift : new Point(0,0);
+      decor.point = newPt+shift;
+    } else if (decor.position) {
+      var newVec = edge.getTangentAt(decor.curveLoc*edge.length);
+      decor.position = newPt;
+      decor.rotate(newVec.angle - decor.rotation);
+    } else {
+      console.log("Something wrong in update decoration.");
+    }
+  }
+}
+function decoratePath(myPath, decor, args) {
+  var offset = (args && (args.curveLoc || args.curveLoc == 0)) ? args.curveLoc*myPath.length : 0.5;
+  var point = myPath.getPointAt(offset);
+  var vector = myPath.getTangentAt(offset);
+  decor.applyMatrix = false;
+  decor.position = point;
+  decor.rotate(vector.angle);
+  decor.curveLoc = offset/myPath.length; //Careful! Two different uses of the word offset. Be consistent with PaperJS.
+  //decor.shift = null;
+  var returnGroup = myPath.hasDecoration ? myPath.parent : new Group([myPath]);
+  returnGroup.addChild(decor);
+  myPath.hasDecoration = true;
+  return returnGroup;
+}
+function labelify(item, label, args) {
+  var shift = (args && args.shift) ? args.shift : new Point(0,5);
+  var loc = (args && args.curveLoc) ? item.getPointAt(item.length * args.curveLoc) : item.position;
+  var itemGroup = item.hasDecoration ? item.parent : new Group([item]);
+  var txt = new PointText({
+    point: loc+shift,
+    content: label,
+    style: (args && args.labelStyle) ? args.labelStyle : textStyle, // Or pass in the args.
+    justification: "center", // Optional.
+    isLabel: true, // Hopefully this can be eliminated.
+    strokeWidth: 1,
+  });
+  if (args && args.curveLoc) {
+    txt.curveLoc = args.curveLoc;
+  }
+  itemGroup.addChild(txt);
+  item.hasLabel = true;
+  //txt.locked = args ? args.lockLabel : false;
+  return itemGroup;
+}
+function tickify(myPath, args) { //Args: length, curveLoc.
+  var length = (args && args.length) ? args.length : 4;
+  var thisTick = new Path([new Point(0,-length), new Point(0,length)]);
+  var curveLoc = (args && args.curveLoc) ? args.curveLoc : 0;
+  return decoratePath(myPath, thisTick, {curveLoc: curveLoc});
+}
+function arrowify(myPath, args) { //Args: arrowSize, arrowFill, curveLoc
+  var arrowSize = (args && args.arrowSize) ? args.arrowSize : 10;
+  var fill = args ? args.arrowFill : false;
+  var thisArrowTip = setArrowTip({size: arrowSize, isFilled: fill});
+  var curveLoc = (args && args.curveLoc) ? args.curveLoc : 1;
+  if (args && args.reverse) {
+    thisArrowTip.rotate(180);
+    curveLoc = 1 - curveLoc;
+  }
+  thisArrowTip.locked = true;
+  return decoratePath(myPath, thisArrowTip, {curveLoc: curveLoc});
+}
+function setArrowTip(args) { // Args: size, isFilled.
+  var size = (args && args.size) ? args.size : 12;
+	var arrowTipPath = new Path({
+    segments: [
+      new Point(-0.924, 0.383)*size,
+      new Point(0,0),
+      new Point(-0.924, -0.383)*size
+    ],
+    fillColor: null,
+    pivot: new Point(0,0),
+  });
+  if (args && args.isFilled) {
+  	arrowTipPath.fillColor = arrowTipPath.strokeColor;
+  }
+	return arrowTipPath;
+}
+function boundaryPoint(item, pt2) {
+  if (item.className === "Point") {
+    return item;
+  }
+  var boundPath = new Path.Rectangle(item.bounds);
+  var seg = new Path.Line(item.position, pt2);
+  var intersections = boundPath.getIntersections(seg);
+  boundPath.remove();
+  seg.remove();
+  return (intersections[0] ? intersections[0].point : item.position);
+}
+function lineSegment(item1, item2) {
+  var items = [item1, item2];
+  var lineSeg;
+  var point1 = boundaryPoint(items[0], items[1].position);
+  var point2 = boundaryPoint(items[1], items[0].position);
+  lineSeg = new Path([point1, point2]);
+  return lineSeg;
+}
+
+function loadCanvas() {
+  createBackground();
+  myCD = commutativeDiagram(snakeLemmaDiagram);
+  //myCD.position += new Point(100,80);
+}
+
+function onMouseDown(event) {
+  if (event.modifiers.shift) {
+    var newPt = (event.point / myCD.grid).round();
+    var newLabel;
+    if (myCD.ids[newPt.y-1] && myCD.ids[newPt.y-1][newPt.x-1]) {
+      newLabel = myCD.nodArr[newPt.y-1][newPt.x - 1].isZeroMod ? "0"
+                 : String.fromCharCode(97+num_named_elements);
+      num_named_elements += 1;
+    }
+    annGraph.addNode(newPt*myCD.grid + annGraph.shift, newLabel);
+    var newNode = annGraph.getNodeAt(newPt*myCD.grid+annGraph.shift, 10);
+    if (newLabel === "0") {
+      console.log("New node is zero. In both kernels.");
+      num_named_elements -= 1;
+      newNode.data.kerDown = true;
+      newNode.data.kerRight = true;
+    }
+  }
+}
+//function onMouseDrag(event) {
+//  event.preventDefault();
+//  if (event.modifiers.alt) {
+//    annGraph.position += event.delta;
+//    annGraph.shift += event.delta;
+//  }
+//}
+
+
+function createBackground() {
+  // Make sure this goes into the correct layer.
+  var whiteBackground = new Path.Rectangle({
+    rectangle: view.bounds,
+    fillColor: "white",
+    strokeColor: "white",
+    locked: true,
+  });
+}
+
+</script>
+<script type="text/javascript">
+</script>
+</head>
+<body>
+  <div class="topnav">
+		<a href="about.html">About</a>
+		<a href="braids.html">Braids</a>
+		<a href="commutative-diagram.html">Snake Lemma</a>
+		<a href="dihedral.html">Dihedral group</a>
+    <a href="graphs.html">Graph theory</a>
+    <a href="siegelPlane.html">Siegel Plane</a>
+	  <a href="topology.html">Topology</a>
+	</div>
+  <div>
+<div class="row">
+  <div class="column side">
+    <h2>Snake Lemma</h2>
+    <p>Use the diagram to prove the snake lemma.</p>
+    <h3>How to Use</h3>
+    <p>You can't, yet! Soon this will be updated so that it can be used to perform a diagram chase.</p>
+    <p id="textDisplay"></p>
+  </div>
+  <div class="column middle">
+	<canvas id="myCanvas" width="600" height="500" style="border:1px solid #000">
+		This text is displayed if your browser does not support HTML5.
+	</canvas>
+  </div>
+</body>
+</html>

@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html>
+<head>
+<script type="text/javascript" src="js/paper.js"></script>
+<script type="text/paperscript" canvas="myCanvas">
+
+
+var hitOptions = {
+fill: true,
+segments: false,
+stroke: false,
+tolerance: 5
+};
+
+// Fix styles. One for CDs, one for diagram chases (with different colors.)
+
+project.currentStyle = {
+    fillColor: 'black',
+    strokeColor: 'black',
+    strokeWidth: '1',
+		fontFamily: 'Arial',
+		fontSize: "15px"
+}
+
+var nodeStyle = {
+	fillColor: 'white',
+	strokeColor: 'white',
+	strokeWidth: '1',
+	shadowColor: '#7f8182',
+  shadowBlur: 10,
+  shadowOffset: new Point(15, 10),
+	fontSize: "20px"
+}
+
+var textStyle = {
+	strokeColor: 'white',
+	strokeWidth: '1',
+	fontFamily: 'Arial'
+}
+
+var radius = 20;
+var gridSize = 80;
+var directed = true;
+var myArrow = setArrowTip();
+
+var emptyNode = setNodeSymbol("");
+var zeroNode = setNodeSymbol("0");
+
+
+var g = newGraph();
+addNode(g, new Point(30+3*gridSize,gridSize), "A");
+addNode(g, new Point(30+4*gridSize,gridSize), "B");
+addNode(g, new Point(30+5*gridSize,gridSize), "C");
+addEdge(g, "A", "B", "f");
+//g.nodes.locked = true;
+
+var myArr = arrow(new Point(0,0), new Point(50,50));
+
+function newGraph() { // Optionally  pass style as parameter. Anything else? Directed or not?
+	var graph = {nodes: new Group(), edges: new Group(), arrows: new Group(), labels: new Group()};
+	// Should the graph have its own event listeners, rather than the nodes or whole project?
+	return graph;
+}
+
+function addNode(g, point, label, name) {
+	var newNode;
+	point = (point/gridSize).round()*gridSize;
+	if (!label) {
+		newNode = emptyNode.place(point);
+	} else if (label == "0") {
+		newNode = zeroNode.place(point);
+	} else {
+    newNode = setNodeSymbol(label).place(point);
+	}
+	//newNode.pivot = point;
+	newNode.name = nameify(g.nodes, label);
+	newNode.onMouseDrag = function(event) {
+		shiftNode(this,event.point,g);
+	};
+	newNode.onMouseUp = function(event) {
+		var roundedPoint = (event.point/gridSize).round()*gridSize;
+		shiftNode(this,roundedPoint,g);
+	};
+	g.nodes.addChild(newNode);
+}
+
+// Reuse code with update edges.
+function addEdge(g, node1, node2, name) {
+	var n1 = g.nodes.children[node1];
+	var n2 = g.nodes.children[node2];
+	var start = n1.position;
+	var end = n2.position;
+	var unitVec = (end - start).normalize();
+	var newEdge = new Path([start+unitVec*radius, end-unitVec*radius]);
+	if (!name) {
+		name = nameify(g.edges, node1, node2); //Implement edge labels.
+	}
+	newEdge.name = name;
+	newEdge.n1 = node1;
+	newEdge.n2 = node2;
+	g.edges.addChild(newEdge);
+	if (directed) {
+		var thisArrowTip = arrowify(newEdge);
+		thisArrowTip.name = name;
+		g.arrows.addChild(thisArrowTip);
+	}
+}
+
+function updateEdges(g, node) {
+	var edge, name, start, end, unitVec, thisArrowTip;
+	for (var i=0; i < g.edges.children.length; i++) {
+		edge = g.edges.children[i];
+		name = edge.name;
+		start = g.nodes.children[edge.n1].position;
+		end = g.nodes.children[edge.n2].position;
+		if (start != node.position && end != node.position) {
+			continue;
+		}
+		unitVec = (end - start).normalize();
+		edge.lastSegment.point = end-unitVec*radius;
+		edge.firstSegment.point = start+unitVec*radius;
+		if (g.arrows.children[name]) {
+			g.arrows.children[name].remove();
+		}
+		if (directed) {
+			thisArrowTip = arrowify(edge);
+			thisArrowTip.name = name;
+			g.arrows.addChild(thisArrowTip);
+		}
+	}
+}
+
+function shiftNode(node, point,g) {
+	var delta = point - node.position;
+	node.position += delta;
+	if (g.labels.children[node.name]) {
+		g.labels.children[node.name].point += delta;
+	}
+	updateEdges(g, node);
+}
+
+// Ensure label string is a valid name (unique identifier).
+function nameify(group, label, label2) {
+	if (label2) {
+		label = label + "-" + label2;
+	}
+	if (!isNaN(label)) {
+		label = "N" + label;
+	}
+	if (!group.children[label]) {
+		return label;
+	}
+	var alteredLabel;
+	for (var i=2; i < 100; i++) {
+		alteredLabel = label + i;
+		if (!group.children[alteredLabel]) {
+			return alteredLabel;
+		}
+	}
+}
+
+function setNodeSymbol(label) {
+	var symbolPath = new Path.Circle(new Point(0,0), radius);
+	symbolPath.style = nodeStyle;
+	var text = new PointText(new Point(0,5));
+	text.justification = 'center';
+	text.content = label;
+	var symGroup = new Group(symbolPath, text);
+	var returnSymbol = new Symbol(symGroup);
+	return returnSymbol;
+}
+
+function setArrowTip() {
+	var size = 12;
+	var rightPoint = new Point(-Math.cos(Math.PI/7),Math.sin(Math.PI/7));
+	var leftPoint = new Point(-Math.cos(Math.PI/7),-Math.sin(Math.PI/7));
+	var arrowTipPath = new Path([rightPoint*size, new Point(0,0), leftPoint*size]);
+	arrowTipPath.fillColor = "black";
+	arrowTipPath.strokeColor = "black";
+	var arrowTipSymbol = new Symbol(arrowTipPath);
+	arrowTipSymbol.pivot = new Point(0,0);
+	return arrowTipSymbol;
+}
+
+function arrow(from, to) {
+	var stem = new Path([from,to]);
+	var size = 12;
+	var right = new Point(-Math.cos(Math.PI/7),Math.sin(Math.PI/7));
+	var left = new Point(-Math.cos(Math.PI/7),-Math.sin(Math.PI/7));
+	var arrowTipPath = new Path([to+right*size, to, to+left*size]);
+	arrowTipPath.closed = true;
+	arrowTipPath.rotate((to-from).angle, to);
+	var arrowFull = new CompoundPath({children: [stem,arrowTipPath]});
+	arrowFull.fillColor = "black";
+	arrowFull.strokeColor = "black";
+	return arrowFull;
+}
+
+function arrowify(myPath) {
+	var arrowSize = 12;
+	var point = myPath.lastSegment.point;
+	var vector = myPath.getTangentAt(myPath.length);
+	var thisArrowTip = myArrow.place(point-vector*arrowSize/2);
+	thisArrowTip.rotate(vector.angle);
+	return thisArrowTip;
+}
+</script>
+<script type="text/javascript">
+</script>
+</head>
+<body>
+  <div>
+	<canvas id="myCanvas" width="600" height="500" style="border:1px solid">
+		This text is displayed if your browser does not support HTML5.
+	</canvas>
+  </div>
+	<div>
+	  <input type="checkbox">
+		<label>Directed graph</label>
+	</div>
+	<div>
+	  <p id="textDisplay"></p>
+	</div>
+	<div id="like_button_container"></div>
+<script src="https://unpkg.com/react@17/umd/react.development.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js" crossorigin></script>
+<script src="like_button.js"></script>
+</body>
+</html>

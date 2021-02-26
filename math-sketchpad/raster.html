@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title> Neural Nets</title>
+<link rel="stylesheet" href="mathsketchpad.css">
+<script type="text/javascript" src="js/paper.js"></script>
+<script type="text/paperscript" canvas="myCanvas">
+
+var hitOptions = {
+	fill: true,
+	stroke: true,
+	segments: true,
+	tolerance: 5
+}
+
+var raster, raster2, scaleFactor;
+
+var weightMatrix;
+
+var currentRaster;
+
+setGlobals();
+loadCanvas();
+
+function convertPx(point, raster) {
+	var newPt = (point - raster.bounds.topLeft)/scaleFactor;
+	return newPt;
+}
+
+function dotMatrices(m1, m2) {
+	var total = 0;
+	for (var j=0; j<m1.length; j++) {
+		var row = m1[j];
+		for (var i=0; i<row.length; i++) {
+			total += m1[j][i] * m2[j][i];
+		}
+	}
+	return total;
+}
+
+function onMouseDown(event) {
+	console.log(convertPx(event.point, raster2));
+	var hitResult = project.hitTest(event.point, hitOptions);
+	if (!hitResult) {
+		return;
+	}
+	currentRaster = hitResult.item;
+}
+
+function onMouseDrag(event) {
+	//var rasterPoint = (event.point - raster.bounds.topLeft)/scaleFactor;
+	var rasterPoint = convertPx(event.point, currentRaster);
+	var pxColor = currentRaster.getPixel(rasterPoint);
+	if (currentRaster.name == "RasterRedGreen") {
+		if ((pxColor.red === pxColor.green) && (pxColor.green === pxColor.blue)) {
+			if (event.modifiers.shift) {
+				pxColor = new Color("red");
+				pxColor.alpha = 0.1;
+			} else {
+				pxColor = new Color("green");
+				pxColor.alpha = 0.1;
+			}
+		} else {
+			pxColor.alpha += 0.05;
+		}
+	} else if (currentRaster.name == "DigitRaster") {
+		pxColor.gray -= 0.05;
+	}
+  currentRaster.setPixel(rasterPoint, pxColor);
+}
+
+function onMouseUp() {
+	console.log("Mouse up");
+	if (weightMatrix) {
+	  console.log(dotMatrices(weightMatrix, rasterToMatrix(raster2, false)));
+	}
+}
+
+function loadCanvas() {
+	// Set background.
+	project.activeLayer.name = "Background";
+	project.currentStyle = {fillColor: "white", strokeColor: "white"};
+	var whiteBackground = new Path.Rectangle(view.bounds);
+	whiteBackground.locked = true;
+	var width = 28;
+	var height = 28;
+	raster = new Raster(new Size(width, height));
+	for (var i = 0; i < width; i++) {
+	    for (var j = 0; j < height; j++) {
+	        //raster.setPixel(i, j, new Color(Math.random()));
+					var newColor = ((i+j)%2 == 0) ? "#fff" : "#eee";
+					raster.setPixel(i, j, newColor);
+	    }
+	}
+	raster.position += new Point(200,200);
+	raster.name = "RasterRedGreen";
+	scaleFactor = 12;
+	raster.scale(scaleFactor);
+	raster2 = raster.clone();
+	raster2.name = "DigitRaster";
+	raster2.position += new Point(400,0);
+
+}
+
+function multiplyMatrices(m1, m2) {
+    var result = [];
+    for (var i = 0; i < m1.length; i++) {
+        result[i] = [];
+        for (var j = 0; j < m2[0].length; j++) {
+            var sum = 0;
+            for (var k = 0; k < m1[0].length; k++) {
+                sum += m1[i][k] * m2[k][j];
+            }
+            result[i][j] = sum;
+        }
+    }
+    return result;
+}
+
+function rasterToMatrix(raster, toAlpha) {
+	var w = raster.size.width;
+	var h = raster.size.height;
+	var pxColor;
+	var pxMatrix = [];
+	var row;
+	for (var j=0; j<h; j++) {
+		row = [];
+		for (var i=0; i<w; i++) {
+			pxColor = raster.getPixel(i,j);
+			if (toAlpha) {
+				if (pxColor.red < pxColor.green) {
+					row.push(pxColor.alpha);
+				} else if (pxColor.red == pxColor.green) {
+					row.push(0);
+				} else if (pxColor.red > pxColor.green) {
+					row.push(-pxColor.alpha);
+				}
+			} else {
+				row.push(1-pxColor.gray);
+			}
+			// Done with this entry.
+		}
+		pxMatrix.push(row);
+	}
+	return pxMatrix;
+}
+
+function updateWindowDisplay() {
+	return;
+}
+
+function undo() {
+	console.log("Undo not implemented");
+	return;
+}
+
+function setGlobals() {
+  globals.updateDisplay = updateWindowDisplay;
+	globals.undo = undo;
+	globals.refreshCanvas = function() {
+		project.clear();
+		loadCanvas();
+	};
+	globals.saveMatrix = function () {
+		weightMatrix = rasterToMatrix(raster, true);
+	};
+	globals.setFillColor = function(color) {
+		project.currentStyle.fillColor = color;
+	};
+	globals.setStrokeColor = function(color) {
+		project.currentStyle.strokeColor = color;
+	};
+	globals.setStrokeWidth = function(strokeWidth) {
+		project.currentStyle.strokeWidth = strokeWidth;
+	};
+	globals.setNum  =  function(n) {
+		//values.num =  n;
+		return;
+	};
+	globals.resizePaper = function() {
+    var background = project.layers["Background"].children[0];
+    background.scale(view.bounds.width/background.bounds.width, view.bounds.height/background.bounds.height, new Point(0,0));
+  }
+}
+</script>
+<script type="text/javascript">
+window.globals = {
+  setText: function(displayString) {
+		document.getElementById("textDisplay").innerHTML = displayString;
+	},
+};
+window.onload = function() {
+  document.getElementById('undoBtn').onclick = function() {
+    window.globals.undo();
+  };
+	document.getElementById('strokeColorInput').onchange = function() {
+    window.globals.setStrokeColor(document.getElementById('strokeColorInput').value);
+  };
+	document.getElementById('fillColorInput').onchange = function() {
+    window.globals.setFillColor(document.getElementById('fillColorInput').value);
+  };
+	document.getElementById('strokeWidthInput').onchange = function() {
+    window.globals.setStrokeWidth(document.getElementById('strokeWidthInput').value);
+  };
+	document.getElementById('refreshButton').onclick = function() {
+    window.globals.refreshCanvas(document.getElementById('numStrandsInput').value);
+  };
+	document.getElementById('saveButton').onclick = function() {
+    window.globals.saveMatrix();
+  };
+	document.getElementById('numStrandsInput').value = globals.numStrands;
+};
+</script>
+</head>
+<body onresize="globals.resizePaper()">
+	<div class="topnav">
+		<a href="about.html">About</a>
+		<a href="braids.html">Braids</a>
+		<a href="commutative-diagram.html">Snake Lemma</a>
+		<a href="dihedral.html">Dihedral group</a>
+    <a href="graphs.html">Graph theory</a>
+		<a href="siegelPlane.html">Siegel Plane</a>
+	  <a href="topology.html">Topology</a>
+	</div>
+	<div>
+<div class="row">
+	<div class="column side">
+		<h2>Full sketchpad</h2>
+		<p>This document provides the master copy of the full sketchpad.</p>
+		<h2> Settings</h2>
+		<label>Stroke color</label>
+		<input type="color" id="strokeColorInput" value="#000000">
+		<br>
+		<label>Fill color</label>
+		<input type="color" id="fillColorInput" value="#03fc90">
+		<br>
+		<label>Stroke width</label>
+		<input type="range" id="strokeWidthInput" min=1 max=10 value=2>
+		<br>
+		<button id="refreshButton"> Refresh </button>
+		<button id="saveButton"> Save weight matrix </button>
+		<br>
+		<div style="display:none">
+		  <label>n: </label>
+		  <input type="number" min="3" max="7" id="numStrandsInput">
+		  <br>
+		  <button id="undoBtn"> Undo </button>
+		  <br>
+		  <p id="textDisplay"></p>
+	  </div>
+	</div>
+	<div class="column middle">
+	<canvas id="myCanvas" resize="true" style="border:1px solid #000">
+		This text is displayed if your browser does not support HTML5.
+	</canvas>
+</div>
+</body>

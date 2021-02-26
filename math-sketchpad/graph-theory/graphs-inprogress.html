@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title> Carly Matson's Webpage </title>
+<link rel="stylesheet" href="mathsketchpad.css">
+<script type="text/javascript" src="js/paper.js"></script>
+<script type="text/paperscript" canvas="myCanvas">
+
+var hitOptions = {
+	fill: true,
+	stroke: true,
+	segments: true,
+	tolerance: 5
+};
+
+var nodeStyle = {
+	strokeColor: "black",
+	fillColor: "black",
+	strokeWidth: 1,
+	dashArray: null,
+	fontSize: "15px"
+}
+
+var textStyle = nodeStyle;
+
+var newCurve, newOpen, draggableItem;
+var buttonNames, modeButtons, mode;
+var edges, nodes;
+
+setGlobals();
+loadCanvas();
+
+function loadCanvas() {
+	// Set background.
+	project.currentStyle = {fillColor: "white", strokeColor: "white", dashArray: null};
+	var whiteBackground = new Path.Rectangle(view.bounds);
+	whiteBackground.locked = true;
+	// Create on-screen controls.
+  buttonNames = ["Nodes", "Edges", "Cursor"];
+	modeButtons = buttonBar(buttonNames);
+	mode = modeButtons.firstChild.name;
+	// Initialize starting layers and groups.
+	edges = new Layer({name: "edges"});
+	nodes = new Layer({name: "nodes"});
+	// Preparing to receive input.
+	nodes.activate();
+	project.currentStyle = nodeStyle;
+}
+
+function nodeAt(x,y,label) {
+	nodes.activate();
+	var newPt = new  Point(x,y);
+	var ptPath = new Path.Circle(newPt, 3);
+	ptPath.name = "point-" + label;
+	// Pass label offset as a parameter?
+	var pointLabel = new PointText(newPt + new Point(10,10));
+	pointLabel.content = label;
+	nodes.style = nodeStyle;
+	nodes.locked = true;
+	return newPt;
+}
+
+function updateEdges(g, node) {
+	var edge, name, start, end, unitVec, thisArrowTip;
+	for (var i=0; i < g.edges.children.length; i++) {
+		edge = g.edges.children[i];
+		name = edge.name;
+		start = g.nodes.children[edge.n1].position;
+		end = g.nodes.children[edge.n2].position;
+		if (start != node.position && end != node.position) {
+			continue;
+		}
+		unitVec = (end - start).normalize();
+		edge.lastSegment.point = end-unitVec*radius;
+		edge.firstSegment.point = start+unitVec*radius;
+		if (g.arrows.children[name]) {
+			g.arrows.children[name].remove();
+		}
+		if (directed) {
+			thisArrowTip = arrowify(edge);
+			thisArrowTip.name = name;
+			g.arrows.addChild(thisArrowTip);
+		}
+	}
+}
+
+function onMouseDown(event) {
+	return;
+}
+
+function onMouseMove(event) {
+  return;
+}
+
+function onMouseDrag(event) {
+  return;
+}
+
+function onMouseUp(event) {
+	var myItem = null;
+}
+
+function setMode(newMode) {
+	var indexStart = buttonNames.indexOf(mode);
+	var indexEnd = buttonNames.indexOf(newMode);
+	mode = newMode;
+	modeButtons.children["select"].tween({
+		'position.y': ['+=', 50*(indexEnd-indexStart)]
+	}, 200);
+}
+
+function buttonBar(names) {
+	var buttons = new Group();
+	var buttonSize = new Size(50,50);
+	for (var i=0; i < names.length; i++) {
+		buttons.addChild(myButton(new Point(50,50+i*50), names[i], buttonSize));
+	}
+	var selectionBox = new Path.Rectangle(new Point(25,25), new Size(50,50));
+	selectionBox.strokeWidth = 5;
+	selectionBox.fillColor = null;
+	selectionBox.strokeColor = "#1259ff";
+	selectionBox.name = "select";
+	buttons.addChild(selectionBox);
+	return buttons;
+}
+
+function myButton(point, name, buttonSize) { // Re-do, utilising object constructors.
+	//Button content.
+	var text = new PointText(point + buttonSize/2);
+	text.content = name;
+	text.justification = 'center';
+	text.style = textStyle;
+	// Button background.
+	var background = new Path.Rectangle(point, buttonSize);
+	background.style = nodeStyle;
+	background.fillColor = "white";
+	// Create symbol, place it, and name it.
+	var buttonGroup = new Group(background, text);
+	var buttonSym = new SymbolDefinition(buttonGroup);
+	var button = buttonSym.place(point);
+	button.name = name;
+	return button;
+}
+
+function updateWindowDisplay() {
+	return;
+}
+
+function undo() {
+	console.log("Undo not implemented");
+	return;
+}
+
+function setGlobals() {
+  globals.updateDisplay = updateWindowDisplay;
+	globals.undo = undo;
+	globals.refreshCanvas = function() {
+		project.clear();
+		loadCanvas();
+	}
+	globals.setFillColor = function(color) {
+		project.currentStyle.fillColor = color;
+	};
+	globals.setStrokeColor = function(color) {
+		project.currentStyle.strokeColor = color;
+	};
+	globals.setStrokeWidth = function(strokeWidth) {
+		project.currentStyle.strokeWidth = strokeWidth;
+	};
+	globals.setNum  =  function(n) {
+		//values.num =  n;
+		return;
+	};
+}
+</script>
+<script type="text/javascript">
+window.globals = {
+  setText: function(displayString) {
+		document.getElementById("textDisplay").innerHTML = displayString;
+	},
+};
+window.onload = function() {
+  document.getElementById('undoBtn').onclick = function() {
+    window.globals.undo();
+  };
+	document.getElementById('strokeColorInput').onchange = function() {
+    window.globals.setStrokeColor(document.getElementById('strokeColorInput').value);
+  };
+	document.getElementById('fillColorInput').onchange = function() {
+    window.globals.setFillColor(document.getElementById('fillColorInput').value);
+  };
+	document.getElementById('strokeWidthInput').onchange = function() {
+    window.globals.setStrokeWidth(document.getElementById('strokeWidthInput').value);
+  };
+	document.getElementById('refreshButton').onclick = function() {
+    window.globals.refreshCanvas(document.getElementById('numStrandsInput').value);
+  };
+	document.getElementById('numStrandsInput').value = globals.numStrands;
+};
+</script>
+</head>
+<body>
+	<div class="topnav">
+		<a href="about.html">About</a>
+		<a href="braids.html">Braids</a>
+		<a href="commutative-diagram.html">Snake Lemma</a>
+		<a href="dihedral.html">Dihedral group</a>
+    <a href="graphs.html">Graph theory</a>
+		<a href="siegelPlane.html">Siegel Plane</a>
+	  <a href="topology.html">Topology</a>
+	</div>
+	<div>
+<div class="row">
+	<div class="column side">
+		<h2>About</h2>
+		<p>About goes here.</p>
+		<h2> Settings</h2>
+		<label>Stroke color</label>
+		<input type="color" id="strokeColorInput" value="#000000">
+		<br>
+		<label>Fill color</label>
+		<input type="color" id="fillColorInput" value="#03fc90">
+		<br>
+		<label>Stroke width</label>
+		<input type="range" id="strokeWidthInput" min=1 max=10 value=2>
+		<br>
+		<button id="refreshButton"> Refresh </button>
+		<br>
+		<div style="display:none">
+		  <label>n: </label>
+		  <input type="number" min="3" max="7" id="numStrandsInput">
+		  <br>
+		  <button id="undoBtn"> Undo </button>
+		  <br>
+		  <p id="textDisplay"></p>
+	  </div>
+	</div>
+	<div class="column middle">
+	<canvas id="myCanvas" width="600" height="500" style="border:1px solid #000">
+		This text is displayed if your browser does not support HTML5.
+	</canvas>
+</div>
+</body>

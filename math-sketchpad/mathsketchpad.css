@@ -1,0 +1,66 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background-image: url("./qbkls.png");
+  height: 100%;
+}
+
+html,
+body {
+    margin: 0;
+}
+
+canvas[resize] {
+    width: 100%;
+    height: 100%;
+}
+
+.header {
+  background-color: #f1f1f1;
+  padding: 5px;
+  text-align: center;
+}
+
+.topnav {
+  background-color: DarkSlateBlue;
+  display: flex;
+  justify-content: space-around;
+}
+
+.topnav a {
+  color: #f2f2f2;
+  text-align: center;
+  padding: 14px 16px;
+  text-decoration: none;
+}
+
+.topnav a:hover {
+  background-color: #ddd;
+  color: black;
+}
+
+.column {
+  padding: 10px;
+}
+
+.column.side {
+  flex-grow: 1;
+}
+
+.column.middle {
+  flex-grow: 4;
+}
+
+.row {
+  display: flex;
+  flex-wrap: nowrap;
+  padding: 10px;
+}
+
+@media screen and (max-width: 900px) {
+  .row {
+    flex-wrap: wrap;
+  }
+}
