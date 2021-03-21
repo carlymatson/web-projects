@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Diagram Chase</title>
+    <link rel="stylesheet" href="mathsketchpad.css" />
+    <script type="text/javascript" src="js/paper.js"></script>
+    <script type="text/paperscript" canvas="myCanvas">
+
+      var verbose = true;
+      var newPath, elementStart;
+      var basics = {
+        selectedItems: [],
+        pointProto: new Path.Circle({
+          center: new Point(0,0),
+          radius: 3,
+          fillColor: "black",
+          strokeColor: "black",
+          strokeWidth: 1,
+          dashArray: null,
+        }),
+        arrowProto: new Path({
+          segments: [new Point(-10,4), new Point(0,0), new Point(-10,-4)],
+          pivot: new Point(0,0),
+          strokeColor: "black",
+          strokeWidth: 1,
+          applyMatrix: false,
+        }),
+        tickProto: new Path({
+          segments: [new Point(0,-4), new Point(0,4)],
+          strokeColor: "red",
+          strokeWidth: 1,
+          applyMatrix: false,
+        }),
+        textStyle: {
+          fillColor: "black",
+          strokeColor: "black",
+          strokeWidth: "1",
+        	fontFamily: "Arial",
+        	fontSize: "15px"
+        },
+        hitOptions: {
+          fill: true,
+        	stroke: true,
+        	segments: true,
+          tolerance: 5
+        },
+        setGlobals: function() {
+          globals.refreshCanvas = function() {
+            project.clear();
+            loadCanvas();
+          }
+        },
+        boundaryPoint: function(item, pt2, args) {
+          if (item.className === "Point") {
+            return item;
+          }
+          if (item.bounds.contains(pt2)) {
+            return pt2;
+          }
+          var boundPath = new Path.Rectangle(item.bounds);
+          boundPath.scale((item.bounds.size + new Size(10,10))/item.bounds.size);
+          if (args && args.padding) {
+            boundPath.scale((item.bounds.size+args.padding*2)/item.bounds.size);
+          }
+          var seg = new Path.Line(item.position, pt2);
+          var intersections = boundPath.getIntersections(seg);
+          boundPath.remove();
+          seg.remove();
+          return (intersections[0] ? intersections[0].point : item.position);
+        },
+        createBackground: function() {
+          // Make sure this goes into the correct layer.
+          var whiteBackground = new Path.Rectangle({
+            rectangle: view.bounds,
+            fillColor: "white",
+            strokeColor: "white",
+            locked: true,
+          });
+        },
+        addDependency: function(owner, decor, args) {
+          var point;
+          if (args && (args.curveTime || args.curveTime == 0)) {
+            point = owner.getPointAt(args.curveTime*owner.length);
+            decor.data.curveTime = args.curveTime;
+          } else {
+            point = owner.point ? owner.point : owner.position;
+          }
+          if (decor.className === "PointText") {
+            decor.data.shift = args ? args.shift : new Point(0,0);
+            owner.data.label.content = decor.content;
+          }
+          if (!decor.applyMatrix) {
+            var vector = owner.getTangentAt(args.curveTime);
+            decor.rotate(vector.angle);
+          }
+          decor.position = point;
+          decor.data.owner = owner;
+          if (!owner.data.dependents) {
+            owner.data.dependents = [];
+          }
+          owner.data.dependents.push(decor);
+          return decor;
+        },
+        updateDependency: function(decor, args) {
+          var point, vec;
+          if (decor.data.n1 || decor.data.n2) {
+            if (decor.data.n1) {
+              var seg = decor.firstSegment;
+              decor.firstSegment.point = basics.boundaryPoint(decor.data.n1, seg.next.point);
+            }
+            if (decor.data.n2) {
+              var seg = decor.lastSegment;
+              decor.lastSegment.point = basics.boundaryPoint(decor.data.n2, seg.previous.point);
+            }
+            return;
+          }
+          if (decor.data.endpoints) {
+            decor.firstSegment.point = basics.boundaryPoint(decor.data.endpoints[0], decor.firstSegment.next.point);
+            decor.lastSegment.point = basics.boundaryPoint(decor.data.endpoints[1], decor.lastSegment.previous.point);
+            return;
+          }
+          if (!decor.data.owner) {
+            return;
+          }
+          var owner = decor.data.owner;
+          var shift = decor.data.shift ? decor.data.shift : new Point(0,0);
+          if (decor.data.curveTime) {
+            point = owner.getPointAt(decor.data.curveTime*owner.length) + shift;
+            //point = owner.getPointAtTime(decor.data.curveTime);
+            vec = owner.getTangentAt(decor.data.curveTime*owner.length);
+          } else {
+            point = (owner.point ? owner.point : owner.position) + shift;
+          }
+          if (decor.point) {
+            decor.point = point;
+          } else {
+            decor.position = point;
+          }
+          if (vec && !decor.applyMatrix) {
+            var rotationPrev = decor.rotation;
+            decor.rotate(vec.angle/rotationPrev);
+          }
+          if (args && args.updateColor) {
+            decor.strokeColor = decor.data.owner.strokeColor;
+            if (decor.fillColor) {
+              decor.fillColor = decor.strokeColor;
+            }
+          }
+        },
+        updateAllDependents: function(item) {
+          if (!item.data.dependents) {
+            return;
+          }
+          for (var i=0; i < item.data.dependents.length; i++) {
+            basics.updateDependency(item.data.dependents[i]);
+          }
+        },
+        lineFromTo: function(item1, item2) {
+          var items = [item1, item2];
+          var lineSeg;
+          var point1 = basics.boundaryPoint(items[0], items[1].position);
+          var point2 = basics.boundaryPoint(items[1], items[0].position);
+          lineSeg = new Path([point1, point2]);
+          return lineSeg;
+        },
+        mapsTo: function (item1, item2) {
+          var line = basics.lineFromTo(item1, item2);
+          var arrowTip = basics.arrowProto.clone();
+          var crossBar = basics.tickProto.clone();
+          decoratePath(line, arrowTip, {curveTime: 1});
+          decoratePath(line, crossBar, {curveTime: 0});
+          return line;
+        },
+        dragSelected: function(event) {
+          if (!basics.selectedItems) {
+            return;
+          }
+          for (var i=0; i<basics.selectedItems.length; i++) {
+            var it = selectedItems[i];
+            if (it.point) {
+              it.point += event.delta;
+            } else if (it.position) {
+              it.position += event.delta;
+            } else {
+            }
+          }
+        },
+        dragToDraw: function(event) {
+          // Implement.
+        },
+        dragToRotate: function(event) {
+          // Rotate all selected? Probably just the first...
+        },
+      };
+      basics.setGlobals();
+
+      var myCD, myDiagramChase, activeChase;
+      var snakeLemmaDiagram = [["", "0", "0", "0", ""],
+                               ["0", "ker(a)", "ker(b)", "ker(c)", ""],
+                               ["0", "A", "B", "C", "0"],
+                               ["0", "A'", "B'", "C'", "0"],
+                               ["", "coker(a)", "coker(b)", "coker(c)", ""],
+                               ["", "0", "0", "0", ""]
+                            ];
+      var fiveLemma = [["A", "B", "C", "D", "E"], ["A'", "B'", "C'", "D'", "E'"]];
+      var nineLemma = [[null, "0", "0", "0", null],
+                       ["0", "A1", "B1", "C1", "0"],
+                       ["0", "A2", "B2", "C2", "0"],
+                       ["0", "A3", "B3", "C3", "0"],
+                       [null, "0", "0", "0", null]
+                     ];
+
+      loadCanvas();
+
+      function loadCanvas() {
+        basics.createBackground();
+        myCD = commutativeDiagram(snakeLemmaDiagram);
+        myDiagramChase = newDiagramChase(myCD, {});
+      }
+      function newDiagramChase(cd, args) {
+        if (!cd) {
+          return null;
+        }
+        var chase;
+        var startColor = new Color({hue: 140, saturation: 1, lightness: 0.4});
+        var color = (args && args.color) ? args.color : startColor;
+        var shift = (args && args.shift) ? args.shift : new Point(25,10);
+        var baseDiagram = cd;
+        function addElement(point, label) {
+          var cd = this.data.baseDiagram;
+          var indexPair = (point / cd.data.grid).round();
+          var newLabel = label ? label : null;
+          // Check that there is a module.
+          if (cd.data.nodArr[indexPair.y-1] && cd.data.nodArr[indexPair.y-1][indexPair.x-1]) {
+            newLabel = cd.data.nodArr[indexPair.y-1][indexPair.x-1].data.label.content==="0" ?
+              "0" : "#";
+          } else  {
+            return false;
+          }
+          var newNode = this.addNode(indexPair*cd.data.grid + this.data.shift, newLabel);
+          if (newLabel === "0") {
+            newNode.data.inKernel = [true, true];
+          } else {
+            newNode.data.inKernel = [false, false];
+          }
+          return newNode;
+        }
+        function dragToChase(event) {
+          if (event.modifiers.alt) {
+            this.data.graph.position += event.delta;
+            this.data.graph.data.shift += event.delta;
+            return;
+          }
+          if (!newPath) {
+            return;
+          }
+          newPath.lastSegment.point = event.point;
+          newPath.firstSegment.point = basics.boundaryPoint(elementStart, event.point);
+        }
+        function setToZero() { // Add this to nodes?
+          this.data.label.content = "0";
+          this.data.inKernel = [true, true];
+          // Update dependents, which should only include cosets (for my own sanity).
+        }
+        var chaseEventHandlers = {
+          onMouseDown: function (event) {
+            elementStart = null;
+            elementStart = this.data.graph.getNodeAt(event.point, 20);
+            if (!elementStart) {
+              return;
+            }
+            project.currentStyle = this.data.graph.data.edgeValues.style;
+            newPath = new Path({
+              segments: [event.point, event.point],
+              style: this.data.graph.data.edgeValues.style,
+            });
+          },
+          onMouseDrag: function(event) {
+            if (event.modifiers.alt) {
+              this.data.graph.position += event.delta;
+              this.data.graph.data.shift += event.delta;
+              return;
+            }
+            if (!newPath) {
+              return;
+            }
+            newPath.lastSegment.point = event.point;
+            newPath.firstSegment.point = basics.boundaryPoint(elementStart, event.point);
+          },
+          onMouseUp: function(event) {
+            if (!newPath) {
+              return;
+            }
+            newPath.remove();
+            if (!elementStart || elementStart != this) {
+              return;
+            }
+            var elementEnd, reverse, thisChase = this.data.graph;
+            var cd = thisChase.data.baseDiagram;
+            var shift = elementStart.position - (elementStart.position/cd.data.grid).round()*cd.data.grid;
+            var vecGrid = ((event.point+shift-elementStart.position)/cd.data.grid).round();  // What is the unit vector of the movement?
+            var coord = vecGrid.x ? 0 : 1; // Which coordinate is nonzero?
+            var pointNew = vecGrid*cd.data.grid + elementStart.position;
+            var moduleTo = cd.getNodeAt(pointNew - shift, 10);
+            // Also check whether  moduleTo is exact in the necsesary direction.
+            if (!moduleTo
+               || Math.abs(vecGrid.x) + Math.abs(vecGrid.y) != 1
+               || vecGrid.x + vecGrid.y == -1 && !elementStart.data.inKernel[coord]
+            ) {
+              if (verbose)
+                console.log("No module / invalid grid move / invalid pullback:",
+                            !moduleTo,
+                            Math.abs(vecGrid.x) + Math.abs(vecGrid.y) != 1,
+                            vecGrid.x + vecGrid.y == -1 && !elementStart.data.inKernel[coord]
+                          );
+              return;
+            }
+            // Add or find new node.
+            var elementEnd = this.data.graph.getNodeAt(pointNew, 20);
+            elementEnd = elementEnd ? elementEnd : thisChase.addElement(pointNew, "");
+            // Determine whether the ending element is zero.
+            if (elementStart.data.label.content === "0"
+              || moduleTo.data.label.content === "0"
+              || vecGrid.x + vecGrid.y == 1 && elementStart.data.inKernel[coord]) {
+              elementEnd.data.label.content = "0";
+              elementEnd.data.inKernel = [true, true];
+            }
+            reverse = (vecGrid.x + vecGrid.y == -1);
+            var myRegex = elementStart.data.label.content.match(/\+\S$/);
+            if (myRegex && (reverse || elementEnd.data.label.content !== "0")) {
+              elementEnd.data.label.content += myRegex;
+            }
+            if (reverse) {
+              if (moduleTo.data.label.content !== "0") {
+                // Create new diagram!
+                var newColor = this.data.graph.data.edgeValues.style.strokeColor.clone();
+                newColor.hue += 70;
+                var myNewChase = newDiagramChase(myCD, {color: newColor, shift: new Point(shift.y, -shift.x)});
+                elementEnd.data.label.content += "+" + String.fromCharCode(916);
+                var newDelta = myNewChase.addElement(pointNew, String.fromCharCode(916));
+                var newZero = myNewChase.addElement(pointNew - vecGrid*myCD.data.grid, "0");
+                newDelta.data.inKernel = [false, false];
+                newZero.data.inKernel = [true, true];
+                newDelta.data.inKernel[coord] = true;
+                newDelta.data.label.content = String.fromCharCode(916);
+                newZero.data.label.content = "0";
+                myNewChase.addEdge(newDelta, newZero);
+              } // Function?: New chase with dependence.
+              this.data.graph.addEdge(elementEnd, elementStart);
+            } else {
+              this.data.graph.addEdge(elementStart, elementEnd);
+            }
+            elementEnd.data.inKernel[coord] = true;
+            if (elementEnd.data.label.content === "0") {
+              elementStart.data.inKernel[coord] = true;
+            }
+          }
+        };
+        chase = newGraph({
+          nodeValues: {
+            symbol: null,
+            mouseEvents: chaseEventHandlers,
+          },
+          labelValues: {
+            style: {
+              strokeColor: color,
+              fontSize: "12px",
+              strokeWidth: 1,
+              //fontFamily: "Arial",
+            },
+            locked: false,
+          },
+          edgeValues: {
+            style: {
+              strokeColor: color,
+              strokeWidth: 1,
+              fill: null,
+            },
+            isDirected: true, // Get rid of this and replace with arrowSize.
+            arrowFill: false,
+            arrowSize: 8,
+            hasCrossbars: true, // Should this and directed be combined with their sizes? Then zero reads as falsy.
+          },
+        });
+        chase.data.shift = shift;
+        chase.data.baseDiagram = cd;
+        chase.addElement = addElement;
+        return chase;
+      }
+      function commutativeDiagram(rows) {
+        // Damn it Carly, just make this its own layer. Or not. I don't know. Haha.
+        var nodeArray = [];
+        cd = newGraph({
+          nodeValues: {
+            symbol: null, /*new SymbolDefinition(new Path.Circle({
+                radius: 18,
+                style: {
+                	fillColor: "white",
+                	strokeColor: null,
+                  strokeWidth: 1,
+                	shadowColor: "#ccc",
+                  shadowBlur: 10,
+                  shadowOffset: new Point(15, 10)
+                },
+            })),*/
+          },
+          edgeValues: {
+            style: {
+              strokeColor: "black",
+              strokeWidth: 1,
+            },
+            isDirected: true,
+            arrowFill: true,
+            hasCrossbars: false,
+          },
+          labelValues: {
+            style: {
+              strokeColor: "black",
+              fillColor: "black",
+              strokeWidth: 1,
+              fontSize: "14px",
+            },
+            defaultShift: new Point(0,0),
+          },
+        });
+        var grid = new Size(100,70);
+        cd.data.grid = new Size(100,70);
+        for (var j=0; j < rows.length; j++) {
+          var nodeRow = [];
+          var prevNode = null;
+          for (var i=0; i < 5; i++) {
+            if (!rows[j][i]) {
+              nodeRow.push(null);
+              continue;
+            }
+            var newNode = cd.addNode(new Point(i+1, j+1)*cd.data.grid, rows[j][i]);
+            nodeRow.push(newNode);
+            // Edges.
+            if (prevNode && (j==2 || j==3) && (i > 0 && i < 5)) {
+              cd.addEdge(prevNode, newNode);
+            }
+            if ((i > 0 && i < 4) && (j > 0  && j <= 5) && (nodeArray[j-1][i])) {
+              cd.addEdge(nodeArray[j-1][i], newNode);
+            }
+            prevNode = newNode;
+          }
+          nodeArray.push(nodeRow);
+        }
+        cd.data.nodArr = nodeArray;
+        cd.data.edgeValues.style.strokeWidth = 2;
+        cd.data.edgeValues.style.strokeColor = "blue";
+        var myEdge1 = cd.addEdge(cd.data.nodArr[1][0], cd.data.nodArr[1][1]);
+        var myEdge2 = cd.addEdge(cd.data.nodArr[1][1], cd.data.nodArr[1][2]);
+        var myEdge3 = cd.addEdge(cd.data.nodArr[1][2], cd.data.nodArr[1][3]);
+        var basePoint = cd.data.nodArr[1][3].position;
+        var mySnakeEdge = new Path([basePoint, basePoint + grid * new Point(1,0)]);
+        mySnakeEdge.arcTo(basePoint + grid * new Point(1,1.5));
+        mySnakeEdge.lineTo(basePoint + grid * new Point(-3, 1.5));
+        mySnakeEdge.arcTo(basePoint + grid * new Point(-3, 3), false);
+        mySnakeEdge.lineTo(basePoint + grid * new Point(-2,3));
+        mySnakeEdge.data.n1 = cd.data.nodArr[1][3];
+        mySnakeEdge.data.n2 = cd.data.nodArr[4][1];
+        basics.updateDependency(mySnakeEdge);
+        var myArrow = basics.arrowProto.clone();
+        myArrow.fillColor = myArrow.strokeColor = "blue";
+        cd.addChild(basics.addDependency(mySnakeEdge, myArrow, {curveTime: 1}));
+        var myEdge4 = cd.addEdge(cd.data.nodArr[4][1], cd.data.nodArr[4][2]);
+        var myEdge5 = cd.addEdge(cd.data.nodArr[4][2], cd.data.nodArr[4][3]);
+        myEdge1.strokeColor = "blue";
+        myEdge2.strokeColor = "blue";
+        myEdge3.strokeColor = "blue";
+        mySnakeEdge.strokeColor = "blue";
+        myEdge4.strokeColor = "blue";
+        myEdge5.strokeColor = "blue";
+
+        return cd;
+      } // To-do: Make list of exercise arrows and their status.
+      function newGraph(args) {
+        // Args: nodeValues, edgeValues, labelValues
+      	var nodes = new Group({name: "nodes"});
+        var edges = new Group({name: "edges"});
+        var g = new Group({
+          children: [nodes, edges],
+          addNode: function(point, label) {
+            var newNode, newLabel;
+            if (!label) {
+              label = String.fromCharCode(97 + this.children["nodes"].children.length);
+              //label = String.fromCharCode(97 + this.children["nodes"]._namedChildren.length);
+            }
+            newLabel = new PointText({
+              point: new Point(0,0),
+              content: label,
+              justification: "center",
+              style: this.data.labelValues ? this.data.labelValues.style : basics.textStyle,
+            });
+            newLabel.position = point;
+            var nodeSym = this.data.nodeValues ? this.data.nodeValues.symbol : null;
+            if (nodeSym) {
+              newNode = nodeSym.place(point);
+              var shift = this.data.defaultShift ? this.data.defaultShift : new Point(0,0);
+              newLabel.point += shift;
+              var decor = basics.addDependency(newNode, newLabel, {}); // {offset: shift}
+              this.addChild(decor);
+            } else {
+              newNode = newLabel;
+            }
+            if (this.data.nodeValues.mouseEvents) {
+              var evs = this.data.nodeValues.mouseEvents;
+              newNode.onMouseDown = evs.onMouseDown ? evs.onMouseDown : null;
+              newNode.onMouseDrag = evs.onMouseDrag ? evs.onMouseDrag : null;
+              newNode.onMouseUp = evs.onMouseUp ? evs.onMouseUp : null;
+            } // Fix these.
+            newNode.data.label = newLabel;
+            newNode.data.graph = this;
+            this.children["nodes"].addChild(newNode);
+            return newNode;
+          },
+          getNodeAt: function(point, tolerance, args) {
+            var tol = tolerance ? tolerance : 20;
+            var nodeHit = this.children["nodes"].hitTest(point, {
+              tolerance: tol,
+              fill: true,
+              stroke: true,
+            });
+            if (!nodeHit || !nodeHit.item) {
+              return null;
+            }
+            var retItem = nodeHit.item;
+            if (retItem.name === "nodes") {
+              return null;
+            }
+            return retItem;
+          },
+          addEdge: function(node1, node2) {
+            var nodes = [node1, node2];
+            var nodeGrp = this.children["nodes"];
+            if (!node1.isDescendant(nodeGrp) || !node2.isDescendant(nodeGrp)) {
+              return;
+            }
+            // Creating and styling the arrow. Unpackage this!
+            project.currentStyle = this.data.edgeValues.style;
+            var newEdge = basics.lineFromTo(node1, node2);
+            if (this.data.edgeValues.isDirected) {
+              var decor = basics.addDependency(newEdge, basics.arrowProto.clone(), {curveTime: 1});
+              decor.style = project.currentStyle;
+              if (this.data.edgeValues.arrowFill) {
+                decor.fillColor = decor.strokeColor;
+              }
+              this.addChild(decor);
+              decor.bringToFront();
+              if (this.data.edgeValues.hasCrossbars) {
+                // Implement crossbars.
+                var decor = basics.addDependency(newEdge, basics.tickProto.clone(), {curveTime: 0});
+                decor.style = project.currentStyle;
+                this.addChild(decor);
+                decor.bringToFront();
+              }
+              // Implement labels.
+            }
+            newEdge.data.endpoints = [node1, node2];
+            newEdge.data.n1 = node1;
+            newEdge.data.n2 = node2;
+            basics.updateDependency(newEdge);
+            // Add to nodes' lists of dependents.
+            for (var i=0; i<2; i++) {
+              if (!nodes[i].data.dependents) {
+                nodes[i].data.dependents = [];
+              }
+              nodes[i].data.dependents.push(newEdge);
+            }
+            this.children["edges"].addChild(newEdge);
+            return newEdge;
+          },
+          updateEdges: function(node) {
+            var g = this;
+            var edge;
+            var incomingEdges = g.children["edges"].getItems({
+              data: {
+                n1: node,
+              }
+            });
+            var outgoingEdges = g.children["edges"].getItems({
+              data: {
+                n2: node,
+              }
+            });
+            for (var i=0; i < incomingEdges.length; i++) {
+              edge = incomingEdges[i];
+              basics.updateDependency(edge);
+              basics.updateAllDependents(edge);
+            }
+            for (var i=0; i < incomingEdges.length; i++) {
+              edge = outgoingEdges[i];
+              basics.updateDependency(edge);
+              basics.updateAllDependents(edge);
+            }
+          },
+          data: {
+            nodes: nodes.children,
+            edges: edges.children,
+            nodeValues: args ? args.nodeValues : null, // Args: symbol, mouseEvents
+            edgeValues: args ? args.edgeValues : null, // Args: style, isDirected, arrowFill, arrowSize, hasCrossbars
+            labelValues: args ? args.labelValues : null, // Args: style, locked, defaultShift
+          },
+        });
+      	return g;
+      }
+
+      function onMouseDown(event) {
+        if (event.modifiers.shift) {
+          if (myDiagramChase.hitTest(event.point, basics.hitOptions)) {
+            return;
+          }
+          myDiagramChase.addElement(event.point);
+        }
+        var hitResult = project.hitTest(event.point, basics.hitOptions);
+      }
+    </script>
+    <script type="text/javascript">
+      window.globals = {};
+      window.onload = function () {
+        document.getElementById("refreshButton").onclick = function () {
+          window.globals.refreshCanvas();
+        };
+      };
+    </script>
+  </head>
+  <body>
+    <div class="topnav">
+      <a href="about.html">About</a>
+      <a href="braids.html">Braids</a>
+      <a href="commutative-diagram.html">Snake Lemma</a>
+      <a href="dihedral.html">Dihedral group</a>
+      <a href="graphs.html">Graph theory</a>
+      <a href="siegelPlane.html">Siegel Plane</a>
+      <a href="topology.html">Topology</a>
+    </div>
+    <div>
+      <div class="row">
+        <div class="column side">
+          <h2>Diagram Chasing</h2>
+          <p>
+            This graph can be used to do interactive
+            <a
+              href="https://en.wikipedia.org/wiki/Commutative_diagram#Diagram_chasing"
+              >diagram chasing</a
+            >.
+            <br />
+            In this example, use the graph to the right to prove the
+            <a href="https://en.wikipedia.org/wiki/Snake_lemma">snake lemma</a>.
+          </p>
+          <h3>How to Use</h3>
+          <ul>
+            <li>Hold SHIFT and click to create an element of a module.</li>
+            <li>Click and drag elements to map them forward.</li>
+            <li>
+              If an element maps to zero, you can pull it back. A new diagram
+              chase will be created with the kernel of the pullback.
+            </li>
+            <li>
+              Hold ALT (or OPTION) and drag to shift the position of the
+              notation grid to improve readability.
+            </li>
+          </ul>
+          <p id="textDisplay"></p>
+          <button id="refreshButton">Clear Diagram</button>
+        </div>
+        <div class="column middle">
+          <canvas
+            id="myCanvas"
+            width="600"
+            height="500"
+            style="border: 1px solid #000"
+          >
+            This text is displayed if your browser does not support HTML5.
+          </canvas>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

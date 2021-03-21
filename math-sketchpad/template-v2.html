@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Template</title>
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script
+      id="MathJax-script"
+      async
+      src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
+    ></script>
+    <link rel="stylesheet" href="fullscreen.css" />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css"
+    />
+    <link rel="stylesheet" href="mathquill-0.10.1/mathquill.css" />
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.0/jquery.min.js"></script>
+    <script src="mathquill-0.10.1/mathquill.js"></script>
+    <script type="text/javascript" src="js/paper.js"></script>
+    <script type="text/paperscript" canvas="myCanvas">
+      var verbose = true;
+      var hitResult, activeItem, selectedItems = []; // Global var hitResult? Might be handy.
+      var backLayer, contentLayer, topLayer;
+      var protos = {
+        point: new Path.Circle({
+          center: new Point(0,0),
+          radius: 3,
+          fillColor: "black",
+          strokeColor: "black",
+          strokeWidth: 1,
+          dashArray: null,
+          data: {type: "Pointy",},
+        }),
+        disc: new Path.Circle({
+          center: new Point(0,0),
+          radius: 1,
+          fillColor: "black",
+          strokeColor: "black",
+          strokeWidth: 1,
+          dashArray: null,
+          strokeScaling: false,
+          data: {type: "Discy",},
+        }),
+        rect: new Path.Rectangle({
+          point: new Point(0,0),
+          size: new Size(1,1),
+          fillColor: "black",
+          strokeColor: "black",
+          strokeWidth: 1,
+          dashArray: null,
+          strokeScaling: false,
+          data: {type: "Recty",},
+        }),
+        arrow: new Path({
+          segments: [new Point(-10,4), new Point(0,0), new Point(-10,-4)],
+          pivot: new Point(0,0),
+          strokeColor: "black",
+          strokeWidth: 1,
+          applyMatrix: false,
+        }),
+        tick: new Path({
+          segments: [new Point(0,-4), new Point(0,4)],
+          strokeColor: "red",
+          strokeWidth: 1,
+          applyMatrix: false,
+        }),
+        dash: [10,12],
+        colorHSLa: new Color({
+          hue: 140,
+          saturation: 1,
+          lightness: 0.4,
+          alpha: 0.7
+        }),
+      };
+      var helpers = {
+        setGlobals: function() {
+          globals.refreshCanvas = function() {
+            project.clear();
+            loadCanvas();
+          };
+          globals.setProps = function(id, props) {
+            var item = project.getItem({id: id});
+            item.set(props);
+          };
+        },
+        createBackground: function() {
+          // Make sure this goes into the correct layer.
+          var whiteBackground = new Path.Rectangle({
+            rectangle: view.bounds,
+            fillColor: "white",
+            strokeColor: "white",
+            locked: true,
+          });
+        },
+        clearVariables: function() {
+          return null;
+        }, // Not implemented.
+        getCharacter: function(index, alphabet) {
+          var char;
+          if (alphabet === "Greek") {
+            char = String.fromCharCode(913+index);
+          } else if (alphabet === "greek") {
+            char = String.fromCharCode(945+index);
+          } else if (alphabet === "Latin") {
+            char = String.fromCharCode(65+index);
+          } else if (alphabet === "latin") {
+            char = String.fromCharCode(97+index);
+          }
+          return char;
+        },
+        boundaryPoint: function(item, pt2, args) {
+          if (item.className === "Point") {
+            return item;
+          }
+          if (item.bounds.contains(pt2)) {
+            return pt2;
+          }
+          var boundPath = new Path.Rectangle(item.bounds);
+          boundPath.scale((item.bounds.size + new Size(10,10))/item.bounds.size);
+          if (args && args.padding) {
+            boundPath.scale((item.bounds.size+args.padding*2)/item.bounds.size);
+          }
+          var seg = new Path.Line(item.position, pt2);
+          var intersections = boundPath.getIntersections(seg);
+          boundPath.remove();
+          seg.remove();
+          return (intersections[0] ? intersections[0].point : item.position);
+        },
+        addDependency: function(owner, decor, args) {
+          var point;
+          if (args && (args.curveTime || args.curveTime == 0)) {
+            point = owner.getPointAt(args.curveTime*owner.length);
+            decor.data.curveTime = args.curveTime;
+          } else {
+            point = owner.point ? owner.point : owner.position;
+          }
+          if (decor.className === "PointText") {
+            decor.data.shift = args ? args.shift : new Point(0,0);
+            owner.data.label.content = decor.content;
+          }
+          if (!decor.applyMatrix) {
+            var vector = owner.getTangentAt(args.curveTime);
+            decor.rotate(vector.angle);
+          }
+          decor.position = point;
+          decor.data.owner = owner;
+          if (!owner.data.dependents) {
+            owner.data.dependents = [];
+          }
+          owner.data.dependents.push(decor);
+          return decor;
+        },
+        updateDependency: function(decor, args) {
+          var point, vec;
+          if (decor.data.n1 || decor.data.n2) {
+            if (decor.data.n1) {
+              var seg = decor.firstSegment;
+              decor.firstSegment.point = basics.boundaryPoint(decor.data.n1, seg.next.point);
+            }
+            if (decor.data.n2) {
+              var seg = decor.lastSegment;
+              decor.lastSegment.point = basics.boundaryPoint(decor.data.n2, seg.previous.point);
+            }
+            return;
+          }
+          if (decor.data.endpoints) {
+            decor.firstSegment.point = basics.boundaryPoint(decor.data.endpoints[0], decor.firstSegment.next.point);
+            decor.lastSegment.point = basics.boundaryPoint(decor.data.endpoints[1], decor.lastSegment.previous.point);
+            return;
+          }
+          if (!decor.data.owner) {
+            return;
+          }
+          var owner = decor.data.owner;
+          var shift = decor.data.shift ? decor.data.shift : new Point(0,0);
+          if (decor.data.curveTime) {
+            point = owner.getPointAt(decor.data.curveTime*owner.length) + shift;
+            //point = owner.getPointAtTime(decor.data.curveTime);
+            vec = owner.getTangentAt(decor.data.curveTime*owner.length);
+          } else {
+            point = (owner.point ? owner.point : owner.position) + shift;
+          }
+          if (decor.point) {
+            decor.point = point;
+          } else {
+            decor.position = point;
+          }
+          if (vec && !decor.applyMatrix) {
+            var rotationPrev = decor.rotation;
+            decor.rotate(vec.angle/rotationPrev);
+          }
+          if (args && args.updateColor) {
+            decor.strokeColor = decor.data.owner.strokeColor;
+            if (decor.fillColor) {
+              decor.fillColor = decor.strokeColor;
+            }
+          }
+        },
+        updateAllDependents: function(item) {
+          if (!item.data.dependents) {
+            return;
+          }
+          for (var i=0; i < item.data.dependents.length; i++) {
+            basics.updateDependency(item.data.dependents[i]);
+          }
+        },
+        lineFromTo: function(item1, item2) {
+          var items = [item1, item2];
+          var lineSeg;
+          var point1 = basics.boundaryPoint(items[0], items[1].position);
+          var point2 = basics.boundaryPoint(items[1], items[0].position);
+          lineSeg = new Path([point1, point2]);
+          return lineSeg;
+        },
+        mapsTo: function (item1, item2) { // FIXME: Implement decorate path.
+          var line = basics.lineFromTo(item1, item2);
+          var arrowTip = basics.arrowProto.clone();
+          var crossBar = basics.tickProto.clone();
+          decoratePath(line, arrowTip, {curveTime: 1});
+          decoratePath(line, crossBar, {curveTime: 0});
+          return line;
+        },
+        decorate: function(path, decor, args) {
+          return;
+        },
+        getReflectionMatrix: function(angle, scale) {
+          angle *= Math.PI/180;
+          var c = Math.cos(angle);
+          var s = Math.sin(angle);
+          return new Matrix(c*c+scale*s*s, (1-scale)*c*s, (1-scale)*c*s, s*s + scale*c*c,0,0);
+        },
+        getRotationMatrix: function(angle) {
+          angle *= Math.PI/180;
+          var c = Math.cos(angle);
+          var s = Math.sin(angle);
+          return new Matrix(c,-s,s,c,0,0);
+        },
+        transformItem: function(item, matrix, point) {
+          var shift = point ? point : item.position;
+          item.position -= shift;
+          item.transform(matrix);
+          item.position += shift;
+        },
+        saveState: function(item) {
+          if (item.writeState) {
+            item.writeState();
+            return;
+          }
+          if (!item.data.history) {
+            item.data.history = [];
+          }
+          var state;
+          if (item.children) {
+            state = {};
+            for (var i=0; i < item.children.length; i++) {
+              state[item.children[i].id] = helpers.saveState(item.children[i]);
+            }
+          } else {
+            state = item.exportJSON();
+          }
+          item.data.history.push(state);
+          return (item.data.history.length-1);
+        },
+        loadState: function(target, index) {
+          // If target has no history in its data, do nothing. Return.
+          if (!target.data.history) {
+            return null;
+          }
+          var hist = target.data.history;
+          index = (index < 0) ? 0 : (index >= hist.length) ? hist.length : index;
+          var state = hist[index];
+          if (target.importState) {
+            target.importState(index);
+          }
+          // If the index is greater than the history length, use the last index.
+
+          // If the target item has a special load function, use that.
+          // Else if the state is a JSON, import it to the target item.
+          // Else if the state is an object, loop through the keys (IDs of children).
+          // If no child with the given ID exists, create and add it.
+          // If the associated value is a JSON, import it. (This shouldn't happen.)
+          // Else if it is an integer, recursively use load state on the child and integer.
+        },
+        linearLayour: function() { // Not implemented.
+          return;
+        },
+        toDisplayString: function(item) {
+          if (item.children) {
+            for (var i=0; i<item.children.length; i++) {
+              helpers.toDisplayString(item.children[i]);
+            }
+          } else {
+            var myType = item.data.type ? item.data.type : item.className;
+            var dispString = myType + " (@" + item.id +")";
+            if (item.className === "PointText") {
+              dispString += ": " + item.content;
+            }
+            globals.newCalcEntry(item.id, dispString);
+          }
+        },
+      };
+      var handlers = {
+        dragToMove: function(event) {
+          if (activeItem.className === "Segment") {
+            activeItem.point += event.delta;
+            activeItem = activeItem.path;
+          } else {
+            activeItem.position += event.delta;
+          }
+          // Update dependents.
+        },
+        dragToDraw: function(event) {
+          if (!activeItem) {
+            return null;
+          }
+          activeItem.add(event.point);
+        },
+        dragToScale: function(event) { // Not implemented. Decisions to make.
+          return;
+        },
+        dragToResize: function(event) {
+          if (!hitResult) {
+            return;
+          }
+          // If name ends in -center, only scale in one direction (about the opposite edge).
+          // Otherwise, scale about the opposite corner.
+          var oppCorner = basics.oppositeCorners[hitResult.name];
+          return null;
+        },
+        dragToRotate: function(event) {
+          if (activeItem.applyMatrix) {
+            return;
+          }
+          var startAngle = (event.point - event.delta - activeItem.position).angle;
+          var currentAngle = (event.point-activeItem.position).angle;
+          activeItem.rotate(currentAngle - startAngle);
+        },
+      };
+      var basics = {
+        hitOptions: {
+          fill: true,
+          stroke: true,
+          segments: true,
+          bounds: true,
+          center: true,
+          tolerance: 5,
+        },
+        oppositeCorners: {
+          "top-center": "bottom-center",
+          "bottom-center": "top-center",
+          "right-center": "left-center",
+          "left-center": "right-center",
+          "top-left": "bottom-right",
+          "top-right": "bottom-left",
+          "bottom-right": "top-left",
+          "bottom-left": "top-right",
+        },
+      };
+      var styles = {
+        text: {
+          fillColor: "black",
+          strokeColor: "black",
+          strokeWidth: 1,
+          dashArray: null,
+          fontFamily: "Arial",
+        },
+        sketch: {
+          fillColor: null,
+          strokeColor: "black",
+          strokeWidth: 2,
+          dashArray: null,
+        },
+      };
+      var diagrams = {
+        snake: [["", "0", "0", "0", ""],
+                                 ["0", "ker(a)", "ker(b)", "ker(c)", ""],
+                                 ["0", "A", "B", "C", "0"],
+                                 ["0", "A'", "B'", "C'", "0"],
+                                 ["", "coker(a)", "coker(b)", "coker(c)", ""],
+                                 ["", "0", "0", "0", ""]
+                              ],
+        five: [["A", "B", "C", "D", "E"], ["A'", "B'", "C'", "D'", "E'"]],
+        nine: [[null, "0", "0", "0", null],
+                         ["0", "A1", "B1", "C1", "0"],
+                         ["0", "A2", "B2", "C2", "0"],
+                         ["0", "A3", "B3", "C3", "0"],
+                         [null, "0", "0", "0", null]
+                       ],
+      };
+      helpers.setGlobals();
+      function loadCanvas() {
+        backLayer = new Layer({name: "background"});
+        helpers.createBackground();
+        contentLayer = new Layer({name: "content"});
+        topLayer = new Layer({name: "controls"});
+        //helpers.createButtonBar(images, labels); // Not implemented.
+        // Set mode (if it isn't set yet)
+        helpers.saveState(contentLayer);
+        contentLayer.activate();
+      }
+
+      loadCanvas();
+      //var myRect = new Path.Rectangle(new Point(10,10), new Point(150,150));
+      var myRect = protos.rect.clone().set({
+        fillColor: "orange",
+        position: new Point(200,200),
+        scaling: new Size(80,100)
+      });
+      contentLayer.addChild(myRect);
+      var myLabel = new PointText({
+        point: new Point(100,100),
+        content: "apple",
+      });
+      var myDot = protos.disc.clone().set({
+        fillColor: "green",
+        strokeWidth: 3,
+        position: new Point(200,100),
+        scaling: new Size(10,10),
+      });
+      contentLayer.addChild(myDot);
+      var myDiag = new Path([new Point(0,0), new Point(300,300)]);
+      myDiag.strokeColor = "black";
+
+
+      helpers.toDisplayString(contentLayer);
+      helpers.saveState(contentLayer);
+
+      globals.openSettings(myDot.id, [
+        {propName: "strokeColor", currentVal: myDot.strokeColor.toCSS(true), inputType: "color"},
+        {propName: "fillColor", currentVal: myDot.fillColor.toCSS(true), inputType: "color"},
+        {propName: "strokeWidth", currentVal: myDot.strokeWidth, inputType: "range", min: 1, max: 10},
+      ]);
+
+      function onMouseMove(event) {
+        // If over on-screen controls, always use default cursor.
+        // If using a fixed-cursor mode, return (or maybe set cursor and then return)
+        if (!event.modifiers.shift) {
+          project.deselectAll();
+        }
+        var hitResult = project.hitTest(event.point, basics.hitOptions);
+        if (hitResult) {
+          hitResult.item.selected = true;
+          if (hitResult.type === "center") { //... and if the item can be moved.
+            view.element.style.cursor = "grab";
+            return;
+          }
+          if (hitResult.item.className === "PointText") {
+            view.element.style.cursor = "text";
+            return;
+          }
+          // if (hitResult.item.data.mytype === "chase" && event.modifiers.shift){view.element.style.cursor = "grab"}
+          if (hitResult.type === "stroke" || hitResult.type === "segment") {
+            // If curve is flexible, grab or insert segment.
+            return;
+          }
+          if (hitResult.type === "bounds") { //... and if the item can be rescaled.
+            if (hitResult.name === "top-center" || hitResult.name === "bottom-center") {
+              view.element.style.cursor = "ns-resize";
+            } else if (hitResult.name === "right-center" || hitResult.name === "left-center") {
+              view.element.style.cursor = "ew-resize";
+            } else if (hitResult.name === "bottom-right" || hitResult.name === "top-left") {
+              view.element.style.cursor = "nwse-resize";
+            } else if (hitResult.name === "top-right" || hitResult.name === "bottom-left") {
+              view.element.style.cursor = "nesw-resize";
+            }
+          }
+        } else {
+          view.element.style.cursor = "default";
+        }
+        return null;
+      }
+
+      function onMouseDown(event) {
+        var hitResult = project.hitTest(event.point, basics.hitOptions);
+        if (hitResult) {
+          activeItem = hitResult.item; // Or just reference hitResult.item?
+          tool.onMouseDrag = handlers.dragToMove;
+          view.element.style.cursor = "grabbing";
+        }
+      }
+
+      function onMouseUp(event) {
+        if (event.modifiers.shift) {
+          return;
+        }
+        if (activeItem) {
+          activeItem = null;
+        }
+        return null;
+      }
+    </script>
+    <script type="text/javascript">
+      window.globals = {
+        newCalcEntry: function (id, displayString) {
+          // Reconsider names. Make more concise if possible.
+          var calc = document.getElementById("calcDisplay");
+          var newCalcEntry = document.createElement("div");
+          var newDiv = document.createElement("div");
+          var newCheckbox = document.createElement("input");
+          var newPar = document.createElement("span");
+          var infoButton = document.createElement("button");
+          var newButton = document.createElement("button");
+          newCheckbox.classList.add("toggle-visible");
+          infoButton.classList.add("toggle-info");
+          newButton.classList.add("toggle-settings");
+          infoButton.id = "toggle-info" + id;
+          var infoIcon = document.createElement("i");
+          infoIcon.classList.add("fa");
+          infoIcon.classList.add("fa-info");
+          infoButton.appendChild(infoIcon);
+          var myIcon = document.createElement("i");
+          myIcon.classList.add("fa");
+          myIcon.classList.add("fa-sliders");
+          newButton.appendChild(myIcon);
+          newButton.id = "toggle-settings" + id;
+          newButton.onclick = function () {
+            if (this.innerHTML === "Settings") {
+              this.innerHTML = "Hide";
+              globals.openSettings(id, [
+                { propName: "opacity", currentVal: 0.5, inputType: "range" },
+              ]);
+            } else {
+              var settingsPanel = document.getElementById(
+                "settings-panel" + id
+              );
+              settingsPanel.remove();
+              this.innerHTML = "Settings";
+            }
+          };
+          newCalcEntry.classList.add("calcEntry");
+          newDiv.classList.add("calcEntryHeader");
+          newPar.textContent = displayString;
+          newCheckbox.type = "checkbox"; // What are these 3 used for?
+          newCheckbox.name = "name";
+          newCheckbox.value = "value";
+          newCheckbox.checked = true;
+          newCalcEntry.id = "calcEntry" + id;
+          newCheckbox.onchange = function () {
+            globals.setProps(id, { visible: this.checked });
+          };
+          newDiv.appendChild(newCheckbox);
+          newDiv.appendChild(newPar);
+          newDiv.appendChild(infoButton);
+          newDiv.appendChild(newButton);
+          newCalcEntry.appendChild(newDiv);
+          calc.appendChild(newCalcEntry);
+        },
+        openSettings: function (id, settings) {
+          var myDiv = document.getElementById("calcEntry" + id);
+          var myButton = document.getElementById("toggle-settings" + id);
+          myButton.innerHTML = "Hide";
+          var mySettingsDiv = document.createElement("div");
+          mySettingsDiv.classList.add("settings-panel");
+          mySettingsDiv.id = "settings-panel" + id;
+          for (var i = 0; i < settings.length; i++) {
+            var myMiniDiv = document.createElement("div");
+            myMiniDiv.classList.add("setting-control");
+            var myLabel = document.createElement("label");
+            var myInput = document.createElement("input");
+            var myProp = settings[i]["propName"];
+            var set = settings[i];
+            myLabel.innerHTML = set["propName"] + ": ";
+            myInput.type = set["inputType"];
+            myInput.name = set["propName"];
+            myInput.value = set["currentVal"];
+            if (set["min"]) {
+              myInput.min = set["min"];
+              myInput.max = set["max"];
+            }
+            myInput.onchange = function () {
+              var newObj = {};
+              newObj[this.name] = this.value;
+              globals.setProps(id, newObj);
+            };
+            myLabel.for = myInput;
+            myMiniDiv.appendChild(myLabel);
+            myMiniDiv.appendChild(myInput);
+            mySettingsDiv.appendChild(myMiniDiv);
+          }
+          myDiv.appendChild(mySettingsDiv);
+        },
+      };
+      window.onload = function () {
+        var MQ = MathQuill.getInterface(2);
+        var answerSpan = document.getElementById("answer");
+        var answerMathField = MQ.MathField(answerSpan, {
+          handlers: {
+            edit: function () {
+              var enteredMath = answerMathField.latex(); // Get entered math in LaTeX format
+              checkAnswer(enteredMath);
+            },
+          },
+        });
+      };
+    </script>
+  </head>
+  <body>
+    <div class="topnav">
+      <a href="about.html">About</a>
+      <a href="braids.html">Braids</a>
+      <a href="commutative-diagram.html">Snake Lemma</a>
+      <a href="dihedral.html">Dihedral group</a>
+      <a href="graphs.html">Graph theory</a>
+      <a href="siegelPlane.html">Siegel Plane</a>
+      <a href="topology.html">Topology</a>
+    </div>
+    <div>
+      <div class="row">
+        <div id="calcDisplay">
+          <div id="calcHeader">
+            <p>
+              Expression List <button><i class="fa fa-undo"></i></button>
+              <button><i class="fa fa-caret-right"></i></button>
+              <button><i class="fa fa-angle-double-right"></i></button>
+            </p>
+          </div>
+        </div>
+        <canvas id="myCanvas" resize="true" style="border: 1px solid #000">
+          This text is displayed if your browser does not support HTML5.
+        </canvas>
+      </div>
+    </div>
+  </body>
+</html>

@@ -40,13 +40,13 @@ var g1, nodeSymbol;
 
 setGlobals();
 loadCanvas();
-
+/*
 g1.addNode(new Point(400,400), "");
 g1.addNode(new Point(300,300), "");
 g1.addNode(new Point(200,400), "");
-g1.addEdge(g1.nodes[0].firstChild, g1.nodes[1].firstChild);
-g1.addEdge(g1.nodes[0].firstChild, g1.nodes[2].firstChild);
-
+g1.addEdge(g1.data.nodes[0].firstChild, g1.data.nodes[1].firstChild);
+g1.addEdge(g1.data.nodes[0].firstChild, g1.data.nodes[2].firstChild);
+*/
 function loadCanvas() {
   nodeSymbol = new SymbolDefinition(new Path.Circle({
       radius: 7,
@@ -80,120 +80,158 @@ function loadCanvas() {
   });
 }
 
-// Methods for graphs.
-// Args: nodeSymbol, edgeStyle, isDirected, arrowFill, hasCrossbars, lockLabels, grid
 function newGraph(args) {
 	var nodes = new Group({name: "nodes"});
   var edges = new Group({name: "edges"});
+
+  function addNode(point, label) {
+    if (!label) {
+      label = String.fromCharCode(97 + this.children["nodes"].children.length);
+    }
+    var nodeSym;
+    if (this.nodeSymbol) {
+      nodeSym = this.nodeSymbol;
+    } else {
+      nodeSym = new SymbolDefinition(new Path.Rectangle({
+        point: new Point(0,0),
+        size: new Size(7.5*label.length+10, 25),
+        strokeColor: null,
+        fillColor: null,
+        strokeWidth: 1
+      }));
+    }
+    var newNode = labelify(nodeSym.place(point), label, {
+      shift: new Point(0,5),
+      lockLabel: this.lockLabels,
+      labelStyle: this.labelStyle ? this.labelStyle : null,
+    });
+    if (this.nodeMouseEvents) {
+      var evs = this.nodeMouseEvents;
+      newNode.onMouseDown = evs.onMouseDown ? evs.onMouseDown : null;
+      //newNode.onMouseDrag = evs.onMouseDrag ? evs.onMouseDrag : null;
+      newNode.onMouseUp = evs.onMouseUp ? evs.onMouseUp : null;
+    }
+    //newNode.data.label = label;
+    newNode.firstChild.data.label = label;
+    this.children["nodes"].addChild(newNode);
+    return newNode;
+  }
+  function getNodeAt(point, tolerance) {
+    var tol = tolerance ? tolerance : 20;
+    var nodeHit = this.children["nodes"].hitTest(point, {
+      tolerance: tol,
+      fill: true,
+      stroke: true,
+      class: PointText,
+    });
+    if (!nodeHit || !nodeHit.item) {
+      return null;
+    }
+    return nodeHit.item.parent.firstChild;
+  }
+
+  function addEdge(node1, node2) {
+    var nodes = [node1, node2];
+    project.currentStyle = this.edgeStyle;
+    var newEdge = lineSegment(node1, node2);
+    if (this.isDirected) {
+      newEdge = arrowify(newEdge, {
+        arrowFill: this.arrowFill,
+        arrowSize: this.arrowSize
+      });
+      if (this.hasCrossbars) {
+        newEdge = tickify(this.eldestDescendant(newEdge));
+      }
+      //newEdge = labelify(eldestDescendant(newEdge), "f", {curveLoc: 0.3});
+    }
+    for (var i=0; i<2; i++) {
+      while (nodes[i].children) {
+        nodes[i] = nodes[i].firstChild;
+      }
+    }
+    newEdge.n1 = nodes[0].id;
+    newEdge.n2 = nodes[1].id;
+    this.children["edges"].addChild(newEdge);
+    return newEdge;
+  }
+  function updateEdges(node) {
+    var g = this;
+    node = this.eldestDescendant(node); // So lame.
+    var edgesIncoming = this.children["edges"].getItems({
+      data: {
+        n1: node.id,
+      },
+    });
+    var edgesOutgoing = this.children["edges"].getItems({
+      data: {
+        n2: node.id,
+      },
+    });
+    for (var i=0; i < edgesIncoming.length; i++) {
+      var edge = g.edges[i];
+      while (edge.children)
+        edge = edge.firstChild;
+      edge.lastSegment.point = boundaryPoint(node, edge.lastSegment.previous.point);
+      updateDecorations(edge);
+    }
+    for (var i=0; i < edgesOutgoing.length; i++) {
+      var edge = g.edges[i];
+      while (edge.children)
+        edge = edge.firstChild;
+      edge.firstSegment.point = boundaryPoint(node, edge.firstSegment.next.point);
+      updateDecorations(edge);
+    }
+  }
+  function eldestDescendant(item) {
+    if (!item)
+      return null;
+    if (item.isChild(this.children["nodes"]) || item.isChild(this.children["edges"])) {
+      return item;
+    }
+    while (item.children)
+      item = item.firstChild;
+    return (item.parent).firstChild;
+  }
+
+  var data = {
+    nodes: nodes.children,
+    edges: edges.children,
+    nodeValues: args ? args.nodeValues : null, // Args: symbol, mouseEvents
+    edgeValues: args ? args.edgeValues : null, // Args: style, isDirected, arrowFill, arrowSize, hasCrossbars
+    labelValues: args ? args.labelValues : null, // Args: style, locked
+    //grid: (args ? args.grid : null), // Maybe not? Most graphs won't use grids.
+    addNode: addNode,
+    getNodeAt: getNodeAt,
+    addEdge: addEdge,
+    updateEdges: updateEdges,
+    eldestDescendant: eldestDescendant, // I don't like it.
+  };
   var g = new Group({
     children: [edges, nodes],
+    //data: data,
     nodes: nodes.children,
     edges: edges.children,
     nodeSymbol: (args ? args.nodeSymbol : null),
+    labelStyle: (args ? args.labelStyle : null),
     edgeStyle: (args ? args.edgeStyle : null),
     isDirected: (args ? args.isDirected : null),
     arrowFill: (args ? args.arrowFill : null),
+    arrowSize: (args ? args.arrowSize : null),
     hasCrossbars: (args ? args.hasCrossbars : null),
-    lockLabels: (args ? args.lockLabels : null),
+    //lockLabels: (args ? args.lockLabels : null),
     grid: (args ? args.grid : null),
     addNode: addNode,
     addEdge: addEdge,
     updateEdges: updateEdges,
+    getNodeAt: getNodeAt,
+    eldestDescendant: eldestDescendant,
+    nodeMouseEvents: (args ? args.nodeMouseEvents : null),
   });
 	return g;
 }
 
-function addNode(point, label) {
-  if (!label) {
-    label = String.fromCharCode(97 + this.children["nodes"].children.length);
-  }
-  var nodeSym;
-  if (this.nodeSymbol) {
-    nodeSym = this.nodeSymbol;
-  } else {
-    nodeSym = new SymbolDefinition(new Path.Rectangle({
-      point: new Point(0,0),
-      size: new Size(15*label.length, 15),
-      strokeColor: null,
-      fillColor: null,
-    }));
-  }
-  var newNode = labelify(nodeSym.place(point), label, {shift: new Point(0,5), lockLabel: this.lockLabels});
-	this.children["nodes"].addChild(newNode);
-  return newNode;
-}
-
-function addEdge(node1, node2) {
-  if (!node1.isDescendant(this.children["nodes"]) ||
-      !node2.isDescendant(this.children["nodes"])) {
-        return;
-      }
-  var nodes = [eldestDescendant(node1), eldestDescendant(node2)];
-  project.currentStyle = this.edgeStyle;
-  var newEdge = lineSegment(node1, node2);
-  if (this.isDirected) {
-    newEdge = arrowify(newEdge, {arrowFill: this.arrowFill});
-    if (this.hasCrossbars) {
-      newEdge = tickify(eldestDescendant(newEdge));
-    }
-    //newEdge = labelify(eldestDescendant(newEdge), "f", {curveLoc: 0.3});
-  }
-  newEdge.n1 = nodes[0].id;
-	newEdge.n2 = nodes[1].id;
-  this.children["edges"].addChild(newEdge);
-  return newEdge;
-}
-
-function updateEdges(node) {
-  var g = this;
-  node = eldestDescendant(node);
-	for (var i=0; i < g.edges.length; i++) {
-		var edge = g.edges[i];
-		if (node && edge.n1 != node.id && edge.n2 != node.id) {
-			continue;
-		}
-    var start = project.getItem({id: edge.n1});
-    var end = project.getItem({id: edge.n2});
-    while (edge.children)
-      edge = edge.firstChild;
-    edge.lastSegment.point = boundaryPoint(end, edge.lastSegment.previous.point);
-    edge.firstSegment.point = boundaryPoint(start, edge.firstSegment.next.point);
-    updateDecorations(edge);
-	}
-}
-
-function updateDecorations(edge) {
-  for (var i=1; i < edge.parent.children.length; i++) {
-    var decor = edge.parent.children[i];
-    var newPt = (decor.curveLoc || decor.curveLoc == 0) ?
-                edge.getPointAt(decor.curveLoc*edge.length) : edge.position;
-    if (decor.point) { // Decor is PointText label.
-      var shift = decor.shift ? decor.shift : new Point(0,0);
-      decor.point = newPt+shift;
-    } else if (decor.position) {
-      var newVec = edge.getTangentAt(decor.curveLoc*edge.length);
-      decor.position = newPt;
-      decor.rotate(newVec.angle - decor.rotation);
-    } else {
-      console.log("Something wrong in update decoration.");
-    }
-  }
-}
-
-function eldestDescendant(item) {
-  if (!item)
-    return null;
-  // Change g1 to this and add to graph?
-  if (item.isChild(g1.children["nodes"]) || item.isChild(g1.children["edges"])) {
-    return item;
-  }
-  while (item.children)
-    item = item.firstChild;
-  return (item.parent).firstChild;
-}
-
 // Labels, arrows, and ticks, oh my!
-function decoratePath(myPath, decor, args) {
+function decoratePath(myPath, decor, args) { //Handle case when path is a grouped path.
   var offset = (args && (args.curveLoc || args.curveLoc == 0)) ? args.curveLoc*myPath.length : 0.5;
   var point = myPath.getPointAt(offset);
   var vector = myPath.getTangentAt(offset);
@@ -308,12 +346,7 @@ function onMouseDown(event) {
     project.currentStyle = g1.edgeStyle;
     newPath = new Path([event.point, event.point]);
     var node1 = eldestDescendant(hitResult.item);
-    //while (node1.children) {
-    //  node1 = node1.firstChild;
-    //}
-    //node1 = (node1.parent).firstChild;
     newPath.n1 = node1;
-    //newPath.n1 = node1.id;
     newPath.sendToBack();
     dragItem = newPath.lastSegment;
     return;
@@ -346,24 +379,17 @@ function onMouseUp(event) {
     newPath = labelify(newPath, alphaLabel, {shift: new Point(8,-8)});
     g1.children["nodes"].addChild(newPath);
   } else if (mode=='Edges' && newPath) {
-    var alphaLabel = String.fromCharCode(97 + g1.nodes.length);
     // Can I split this into its own function?
     var nodeHit = g1.children["nodes"].hitTest(event.point, hitOptions);
     if (nodeHit) {
-      //nodeHit = nodeHit.item;
       nodeHit = eldestDescendant(nodeHit.item);
     }
-    // Get eldest descendant.
-    //while (nodeHit && nodeHit.children) {
-    //  nodeHit = nodeHit.firstChild;
-    //}
-    //nodeHit = (nodeHit.parent).firstChild;
-
     // Create new node, if needed.
     var newNode;
     if (nodeHit) {
       newNode = nodeHit;
-    } else {
+    } else { // Shouldn't I be using g1.addNode() for this?
+      var alphaLabel = String.fromCharCode(97 + g1.nodes.length);
       newNode = g1.nodeSymbol.place(event.point);
       newNode = labelify(newNode, alphaLabel, {shift: new Point(8,-8)});
       g1.children["nodes"].addChild(newNode);
@@ -481,6 +507,7 @@ window.onload = function() {
     window.globals.refreshCanvas();
   };
   document.getElementById('directedCheckbox').checked = 'true';
+
   document.getElementById('directedCheckbox').onchange = function() {
     window.globals.toggleDirected();
   };

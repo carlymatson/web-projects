@@ -1,10 +1,20 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>Neural Nets</title>
+    <title>Template</title>
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script
+      id="MathJax-script"
+      async
+      src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
+    ></script>
     <link rel="stylesheet" href="mathsketchpad.css" />
+    <link rel="stylesheet" href="mathquill-0.10.1/mathquill.css" />
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.0/jquery.min.js"></script>
+    <script src="mathquill-0.10.1/mathquill.js"></script>
     <script type="text/javascript" src="js/paper.js"></script>
     <script type="text/paperscript" canvas="myCanvas">
+
 
       var hitOptions = {
       	fill: true,
@@ -13,136 +23,33 @@
       	tolerance: 5
       }
 
-      var raster, raster2, scaleFactor;
-
-      var weightMatrix;
-
-      var currentRaster;
+      var onScreenControls;
+      var newPath, dragItem;
 
       setGlobals();
       loadCanvas();
 
-      function convertPx(point, raster) {
-      	var newPt = (point - raster.bounds.topLeft)/scaleFactor;
-      	return newPt;
-      }
-
-      function dotMatrices(m1, m2) {
-      	var total = 0;
-      	for (var j=0; j<m1.length; j++) {
-      		var row = m1[j];
-      		for (var i=0; i<row.length; i++) {
-      			total += m1[j][i] * m2[j][i];
-      		}
-      	}
-      	return total;
-      }
-
-      function onMouseDown(event) {
-      	console.log(convertPx(event.point, raster2));
-      	var hitResult = project.hitTest(event.point, hitOptions);
-      	if (!hitResult) {
-      		return;
-      	}
-      	currentRaster = hitResult.item;
-      }
-
-      function onMouseDrag(event) {
-      	//var rasterPoint = (event.point - raster.bounds.topLeft)/scaleFactor;
-      	var rasterPoint = convertPx(event.point, currentRaster);
-      	var pxColor = currentRaster.getPixel(rasterPoint);
-      	if (currentRaster.name == "RasterRedGreen") {
-      		if ((pxColor.red === pxColor.green) && (pxColor.green === pxColor.blue)) {
-      			if (event.modifiers.shift) {
-      				pxColor = new Color("red");
-      				pxColor.alpha = 0.1;
-      			} else {
-      				pxColor = new Color("green");
-      				pxColor.alpha = 0.1;
-      			}
-      		} else {
-      			pxColor.alpha += 0.05;
-      		}
-      	} else if (currentRaster.name == "DigitRaster") {
-      		pxColor.gray -= 0.05;
-      	}
-        currentRaster.setPixel(rasterPoint, pxColor);
-      }
-
-      function onMouseUp() {
-      	console.log("Mouse up");
-      	if (weightMatrix) {
-      	  console.log(dotMatrices(weightMatrix, rasterToMatrix(raster2, false)));
-      	}
-      }
-
       function loadCanvas() {
       	// Set background.
       	project.activeLayer.name = "Background";
-      	project.currentStyle = {fillColor: "white", strokeColor: "white"};
+      	project.currentStyle = {fillColor: "white", strokeColor: "white", dashArray: null};
       	var whiteBackground = new Path.Rectangle(view.bounds);
       	whiteBackground.locked = true;
-      	var width = 28;
-      	var height = 28;
-      	raster = new Raster(new Size(width, height));
-      	for (var i = 0; i < width; i++) {
-      	    for (var j = 0; j < height; j++) {
-      	        //raster.setPixel(i, j, new Color(Math.random()));
-      					var newColor = ((i+j)%2 == 0) ? "#fff" : "#eee";
-      					raster.setPixel(i, j, newColor);
-      	    }
-      	}
-      	raster.position += new Point(200,200);
-      	raster.name = "RasterRedGreen";
-      	scaleFactor = 12;
-      	raster.scale(scaleFactor);
-      	raster2 = raster.clone();
-      	raster2.name = "DigitRaster";
-      	raster2.position += new Point(400,0);
 
       }
 
-      function multiplyMatrices(m1, m2) {
-          var result = [];
-          for (var i = 0; i < m1.length; i++) {
-              result[i] = [];
-              for (var j = 0; j < m2[0].length; j++) {
-                  var sum = 0;
-                  for (var k = 0; k < m1[0].length; k++) {
-                      sum += m1[i][k] * m2[k][j];
-                  }
-                  result[i][j] = sum;
-              }
-          }
-          return result;
+      function onMouseDown(event) {
+
       }
 
-      function rasterToMatrix(raster, toAlpha) {
-      	var w = raster.size.width;
-      	var h = raster.size.height;
-      	var pxColor;
-      	var pxMatrix = [];
-      	var row;
-      	for (var j=0; j<h; j++) {
-      		row = [];
-      		for (var i=0; i<w; i++) {
-      			pxColor = raster.getPixel(i,j);
-      			if (toAlpha) {
-      				if (pxColor.red < pxColor.green) {
-      					row.push(pxColor.alpha);
-      				} else if (pxColor.red == pxColor.green) {
-      					row.push(0);
-      				} else if (pxColor.red > pxColor.green) {
-      					row.push(-pxColor.alpha);
-      				}
-      			} else {
-      				row.push(1-pxColor.gray);
-      			}
-      			// Done with this entry.
-      		}
-      		pxMatrix.push(row);
-      	}
-      	return pxMatrix;
+
+      function onMouseDrag(event) {
+
+      }
+
+
+      function onMouseUp(event) {
+
       }
 
       function updateWindowDisplay() {
@@ -160,10 +67,7 @@
       	globals.refreshCanvas = function() {
       		project.clear();
       		loadCanvas();
-      	};
-      	globals.saveMatrix = function () {
-      		weightMatrix = rasterToMatrix(raster, true);
-      	};
+      	}
       	globals.setFillColor = function(color) {
       		project.currentStyle.fillColor = color;
       	};
@@ -213,10 +117,20 @@
             document.getElementById("numStrandsInput").value
           );
         };
-        document.getElementById("saveButton").onclick = function () {
-          window.globals.saveMatrix();
-        };
         document.getElementById("numStrandsInput").value = globals.numStrands;
+        var MQ = MathQuill.getInterface(2);
+        var problemSpan = document.getElementById("problem");
+        MQ.StaticMath(problemSpan);
+        console.log(problemSpan.content);
+        var answerSpan = document.getElementById("answer");
+        var answerMathField = MQ.MathField(answerSpan, {
+          handlers: {
+            edit: function () {
+              var enteredMath = answerMathField.latex(); // Get entered math in LaTeX format
+              checkAnswer(enteredMath);
+            },
+          },
+        });
       };
     </script>
   </head>
@@ -233,8 +147,19 @@
     <div>
       <div class="row">
         <div class="column side">
-          <h2>Full sketchpad</h2>
+          <h2>Template</h2>
           <p>This document provides the master copy of the full sketchpad.</p>
+          <p>Solve <span id="problem">\sin(x) = 0</span>.</p>
+          <br />
+          <p><span id="answer">x=</span></p>
+          <br />
+          <p>
+            When \(a \ne 0\), there are two solutions to \(ax^2 + bx + c = 0\)
+            and they are \[x = {-b \pm \sqrt{b^2-4ac} \over 2a}.\] Can I type
+            \(A \cap B = C\)? Or $$x=2$$?
+          </p>
+
+          <input type="text" />
           <h2>Settings</h2>
           <label>Stroke color</label>
           <input type="color" id="strokeColorInput" value="#000000" />
@@ -252,7 +177,6 @@
           />
           <br />
           <button id="refreshButton">Refresh</button>
-          <button id="saveButton">Save weight matrix</button>
           <br />
           <div style="display: none">
             <label>n: </label>

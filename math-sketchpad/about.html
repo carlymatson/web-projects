@@ -1,55 +1,69 @@
 <!DOCTYPE html>
 <html>
-<head>
-<title> About </title>
-<link rel="stylesheet" href="mathsketchpad.css">
-</head>
-<body>
-	<div class="topnav">
-		<a href="about.html">About</a>
-		<a href="braids.html">Braids</a>
-		<a href="commutative-diagram.html">Snake Lemma</a>
-		<a href="dihedral.html">Dihedral group</a>
-    <a href="graphs.html">Graph theory</a>
-		<a href="siegelPlane.html">Siegel Plane</a>
-	  <a href="topology.html">Topology</a>
-	</div>
-	<div>
-<div class="row">
-	<div class="column">
-		<h2>About this Webpage</h2>
-		<p>This webpage is the home of my original interactive math visualizations,
-			which cover topics from discrete math to number theory.
-			These are written primarily in Javascript using the HTML5 Canvas,
-			with the exception of those created using the Desmos graphing calculator.
-			They are designed to be interactive, intuitive, and fun.
-			They will be improved and updated frequently.</p>
-		<h2>About the Author</h2>
-		<p>My name is Carly Matson, and I received my Ph.D. in mathematics from
-			the University of Colorado at Boulder in May of 2020.
-			In January 2021 I began learning Javascript and using it to create interactive math visualizations.</br>
-			Here are links to my
-			<a href="http://math.colorado.edu/~cama5144/"> webpage</a> and my
-			<a href="https://github.com/carlymatson"> Github</a>.
-		</p>
-		<div style="display:none">
-			<label>Stroke color</label>
-			<input type="color" id="strokeColorInput" value="#000000">
-			<br>
-			<label>Fill color</label>
-			<input type="color" id="fillColorInput" value="#03fc90">
-			<br>
-			<label>Stroke width</label>
-			<input type="range" id="strokeWidthInput" min=1 max=10 value=2>
-			<br>
-			<button id="refreshButton"> Refresh </button>
-			<br>
-		  <label>n: </label>
-		  <input type="number" min="3" max="7" id="numStrandsInput">
-		  <br>
-		  <button id="undoBtn"> Undo </button>
-		  <br>
-		  <p id="textDisplay"></p>
-	  </div>
-	</div>
-</body>
+  <head>
+    <title>About</title>
+    <link rel="stylesheet" href="mathsketchpad.css" />
+  </head>
+  <body>
+    <div class="topnav">
+      <a href="about.html">About</a>
+      <a href="braids.html">Braids</a>
+      <a href="commutative-diagram.html">Snake Lemma</a>
+      <a href="dihedral.html">Dihedral group</a>
+      <a href="graphs.html">Graph theory</a>
+      <a href="siegelPlane.html">Siegel Plane</a>
+      <a href="topology.html">Topology</a>
+    </div>
+    <div>
+      <div class="row">
+        <div class="column">
+          <h2>About this Webpage</h2>
+          <p>
+            This webpage is the home of my original interactive math
+            visualizations, which cover topics from discrete math to number
+            theory. These are written primarily in Javascript using the HTML5
+            Canvas, with the exception of those created using the Desmos
+            graphing calculator. They are designed to be interactive, intuitive,
+            and fun. They will be improved and updated frequently.
+          </p>
+          <h2>About the Author</h2>
+          <p>
+            My name is Carly Matson, and I received my Ph.D. in mathematics from
+            the University of Colorado at Boulder in May of 2020. In January
+            2021 I began learning Javascript and using it to create interactive
+            math visualizations.
+            <br />
+            Here are links to my
+            <a href="http://math.colorado.edu/~cama5144/"> webpage</a> and my
+            <a href="https://github.com/carlymatson"> Github</a>.
+          </p>
+          <div style="display: none">
+            <label>Stroke color</label>
+            <input type="color" id="strokeColorInput" value="#000000" />
+            <br />
+            <label>Fill color</label>
+            <input type="color" id="fillColorInput" value="#03fc90" />
+            <br />
+            <label>Stroke width</label>
+            <input
+              type="range"
+              id="strokeWidthInput"
+              min="1"
+              max="10"
+              value="2"
+            />
+            <br />
+            <button id="refreshButton">Refresh</button>
+            <br />
+            <label>n: </label>
+            <input type="number" min="3" max="7" id="numStrandsInput" />
+            <br />
+            <button id="undoBtn">Undo</button>
+            <br />
+            <p id="textDisplay"></p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

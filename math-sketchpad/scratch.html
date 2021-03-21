@@ -1,66 +1,149 @@
-
 <!DOCTYPE html>
 <html>
-<head>
-  <title> Scratch </title>
-  <link rel="stylesheet" href="mathsketchpad.css">
-  <script type="text/javascript" src="js/paper.js"></script>
-  <script type="text/paperscript" canvas="myCanvas">
+  <head>
+    <title>Scratch</title>
+    <link rel="stylesheet" href="mathsketchpad.css" />
+    <script type="text/javascript" src="js/paper.js"></script>
+    <script type="text/paperscript" canvas="myCanvas">
+        var activeItem = null;
 
+        var basics = {
+          // Boundary point,
+          transformItem: function(item, matrix, center) {
+            var pointAbout = center ? center : item.pivot ? item.pivot : item.position;
+            item.position -= pointAbout;
+            item.transform(matrix);
+            item.position += pointAbout;
+            return item;
+          },
+          hitOptions: {
+            fill: true,
+          	stroke: true,
+          	segments: true,
+            center: true,
+            bounds: true,
+            tolerance: 15
+          }, // Styles and values should be defined in CD and annotation graph creators.
+          textStyle: {
+            fillColor: "black",
+            strokeColor: "black",
+            strokeWidth: "1",
+          	fontFamily: "Arial",
+          	fontSize: "15px"
+          },
+          hslaColorProto: new Color({
+            hue: 140,
+            saturation: 1,
+            lightness: 0.4,
+            alpha: 0.7
+          }),
+          dragToMove: function(event) { // To-do: Update dependents. Handle segments.
+            activeItem.position += event.delta;
+          },
+        };
 
-var redDot = new Path.Circle(new Point(100,100), 15);
-redDot.fillColor = "red";
-redDot.onMouseDrag = function(event) {
-  this.position += event.delta;
-  console.log("Drag red dot");
-}
-function onMouseMove(event) {
-  console.log("Move");
-}
+      var redDot = new Path.Ellipse(new Point(100,100), 15, 25);
+      redDot.fillColor = "red";
+      redDot.fillColor = basics.hslaColorProto;
+      redDot.name = "redDot";
 
-function onMouseDown(event) {
-  console.log("Down");
-}
+      var myPoint = new Path.Circle(new Point(400,100), 3);
+      myPoint.fillColor = "black";
 
-function onMouseDrag(event) {
-  console.log("Drag");
-}
+      var myRect = new Path.Rectangle(new Point(200,200), new Point(300,250));
+      myRect.fillColor = "purple";
+      console.log(myRect);
 
-function onMouseUp(event) {
-  console.log("Up");
-}
+      var myPath = new Path([new Point(50,200), new Point(150,200), new Point(50,240)]);
+      myPath.strokeColor = "blue";
+      myPath.strokeWidth = 7;
+      myPath.style.strokeJoin = "bevel";
 
-</script>
-</head>
-<body>
-  <div class="topnav">
-    <a href="about.html">About</a>
-    <a href="braids.html">Braids</a>
-    <a href="commutative-diagram.html">Snake Lemma</a>
-    <a href="dihedral.html">Dihedral group</a>
-    <a href="graphs.html">Graph theory</a>
-    <a href="siegelPlane.html">Siegel Plane</a>
-    <a href="topology.html">Topology</a>
-  </div>
-<div class="row">
-  <div class="column side">
-    <h2>Dihedral group</h2>
-    <p>A <b>dihedral group</b> is the group of symmetries of a regular polygon.
-    <h3>How to Use</h3>
-    Click and drag to rotate the polygon. Click on the dashed lines to reflect.</p>
-    <h3>Settings</h3>
-    <div>
-    	<label>N: </label>
-    	<input type="number" min="3" max="10" id="numSidesInput">
-    	<button id="refreshButton"> Make N-gon </button>
-    	<p id="textDisplay"></p>
+      console.log(project);
+
+      var myText = new PointText({
+        point: new Point(100,400),
+        content: "Alakazam",
+      });
+      myText.data.hooboy = "Got it";
+      myText.thingy = "My thingy";
+      myText.rotate(30);
+      myText.bounds.selected = true;
+      console.log(myText.exportJSON());
+
+      function onMouseMove(event) {
+        // If drawing mode, return. Cursor should stay crosshair.
+        // If (hitResult.item.data.mytype === "chase" && event.modifiers.shift)
+        //{view.element.style.cursor = "grab"}
+        var hitResult = project.hitTest(event.point, basics.hitOptions);
+        if (hitResult) {
+          if (hitResult.type === "center") {
+            view.element.style.cursor = "grab";
+          }
+          if (hitResult.type === "bounds") { //... and item can be rescaled.
+            if (hitResult.name === "top-center" || hitResult.name === "bottom-center") {
+              view.element.style.cursor = "ns-resize";
+            } else if (hitResult.name === "right-center" || hitResult.name === "left-center") {
+              view.element.style.cursor = "ew-resize";
+            } else if (hitResult.name === "bottom-right" || hitResult.name === "top-left") {
+              view.element.style.cursor = "nwse-resize";
+            } else if (hitResult.name === "top-right" || hitResult.name === "bottom-left") {
+              view.element.style.cursor = "nesw-resize";
+            }
+          }
+        } else {
+          view.element.style.cursor = "default";
+        }
+        return null;
+      }
+
+      function onMouseDown(event) {
+        var hitResult = project.hitTest(event.point, basics.hitOptions);
+        if (hitResult) {
+          activeItem = hitResult.item;
+          tool.onMouseDrag = basics.dragToMove;
+          view.element.style.cursor = "grabbing";
+        }
+      }
+
+      function onMouseUp(event) {
+        console.log("Up");
+        view.element.style.cursor = "default";
+      }
+    </script>
+  </head>
+  <body>
+    <div class="topnav">
+      <a href="about.html">About</a>
+      <a href="braids.html">Braids</a>
+      <a href="commutative-diagram.html">Snake Lemma</a>
+      <a href="dihedral.html">Dihedral group</a>
+      <a href="graphs.html">Graph theory</a>
+      <a href="siegelPlane.html">Siegel Plane</a>
+      <a href="topology.html">Topology</a>
     </div>
-  </div>
-<div class="column middle">
-	<canvas id="myCanvas" width="600" height="500" style="border:1px solid #000">
-		This text is displayed if your browser does not support HTML5.
-	</canvas>
-</div>
-</div>
-</body>
+    <div class="row">
+      <div class="column side">
+        <h2>Scratch</h2>
+        <p>Info goes here.</p>
+        <h3>Settings</h3>
+        <div>
+          <label>N: </label>
+          <input type="number" min="3" max="10" id="numSidesInput" />
+          <button id="refreshButton">Button</button>
+          <p id="textDisplay">Text display.</p>
+        </div>
+      </div>
+      <div class="column middle">
+        <canvas
+          id="myCanvas"
+          width="600"
+          height="500"
+          style="border: 1px solid #000"
+        >
+          This text is displayed if your browser does not support HTML5.
+        </canvas>
+      </div>
+    </div>
+  </body>
 </html>

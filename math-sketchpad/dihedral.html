@@ -1,287 +1,297 @@
-
 <!DOCTYPE html>
 <html>
-<head>
-  <title> Dihedral Groups </title>
-  <link rel="stylesheet" href="mathsketchpad.css">
-  <script type="text/javascript" src="js/paper.js"></script>
-  <script type="text/paperscript" canvas="myCanvas">
+  <head>
+    <title>Dihedral Groups</title>
+    <link rel="stylesheet" href="mathsketchpad.css" />
+    <script type="text/javascript" src="js/paper.js"></script>
+    <script type="text/paperscript" canvas="myCanvas">
 
-var values = {
-  numSides: 5,
-	radius: 150,
-	x0: 300,
-	y0:250
-}
+      var values = {
+        numSides: 5,
+      	radius: 150,
+      	x0: 300,
+      	y0:250
+      }
 
-var hitOptions = {
-  fill: true,
-  stroke: true,
-  segments: true,
-	tolerance: 5
-};
+      var hitOptions = {
+        fill: true,
+        stroke: true,
+        segments: true,
+      	tolerance: 5
+      };
 
-var textStyle = {
-  strokeColor: 'white',
-  strokeWidth: 1,
-  fillColor: 'white',
-  fontSize: "20px",
-  fontFamily: 'Courier New'
-}
+      var textStyle = {
+        strokeColor: 'white',
+        strokeWidth: 1,
+        fillColor: 'white',
+        fontSize: "20px",
+        fontFamily: 'Courier New'
+      }
 
-var polygonStyle = {
-    strokeColor: 'black',
-    strokeWidth: 6,
-		fillColor: 'DarkSlateBlue',
-		fontSize: "20px",
-		fontFamily: 'Courier New'
-}
+      var polygonStyle = {
+          strokeColor: 'black',
+          strokeWidth: 6,
+      		fillColor: 'DarkSlateBlue',
+      		fontSize: "20px",
+      		fontFamily: 'Courier New'
+      }
 
-project.currentStyle = polygonStyle;
-var newSymbol;
-var polySymbol;
-setGlobals();
-loadCanvas();
+      project.currentStyle = polygonStyle;
+      var newSymbol;
+      var polySymbol;
+      setGlobals();
+      loadCanvas();
 
-function loadCanvas() {
-  var whiteBackground = new Path.Rectangle({
-    rectangle: view.bounds,
-    strokeColor: 'white',
-    fillColor: 'white',
-    dashArray: null,
-    locked: true,
-  });
-  //polySymbol = createPolygon(values.numSides);
-  polySymbol = setPolygonSymbol(6,80,"");
-  var myPoly = polySymbol.place(new Point(view.bounds.size/2));
-  console.log(polySymbol, myPoly);
-  //polySymbol.position += new Point(200,200);
-}
+      function loadCanvas() {
+        var whiteBackground = new Path.Rectangle({
+          rectangle: view.bounds,
+          strokeColor: 'white',
+          fillColor: 'white',
+          dashArray: null,
+          locked: true,
+        });
+        //polySymbol = createPolygon(values.numSides);
+        polySymbol = setPolygonSymbol(6,80,"");
+        var myPoly = polySymbol.place(new Point(view.bounds.size/2));
+        console.log(polySymbol, myPoly);
+        //polySymbol.position += new Point(200,200);
+      }
 
-function setPolygonSymbol(numSides, radius, decoration) {
-	var theta =  Math.PI/numSides;
-  var symbolGroup = new Group();
-	var vertexList = [];
-  // Set text style.
-  project.currentStyle = textStyle;
-	for (var i=1; i <= numSides; i++) {
-		var newVertex = new Point(radius*Math.cos(2*theta*i), -radius*Math.sin(2*theta*i));
-		vertexList.push(newVertex);
-    symbolGroup.addChild(new PointText({
-      point: newVertex*(4/5) + new Point(0,5),
-      content: i+1,
-      justification: 'center',
-    }));
-	}
-  project.currentStyle = polygonStyle;
-  var polygonPath = new Path({
-    segments: vertexList,
-    closed: true,
-  });
-  symbolGroup.insertChild(0, polygonPath);
-	return( new SymbolDefinition(symbolGroup) );
-}
+      function setPolygonSymbol(numSides, radius, decoration) {
+      	var theta =  Math.PI/numSides;
+        var symbolGroup = new Group();
+      	var vertexList = [];
+        // Set text style.
+        project.currentStyle = textStyle;
+      	for (var i=1; i <= numSides; i++) {
+      		var newVertex = new Point(radius*Math.cos(2*theta*i), -radius*Math.sin(2*theta*i));
+      		vertexList.push(newVertex);
+          symbolGroup.addChild(new PointText({
+            point: newVertex*(4/5) + new Point(0,5),
+            content: i+1,
+            justification: 'center',
+          }));
+      	}
+        project.currentStyle = polygonStyle;
+        var polygonPath = new Path({
+          segments: vertexList,
+          closed: true,
+        });
+        symbolGroup.insertChild(0, polygonPath);
+      	return( new SymbolDefinition(symbolGroup) );
+      }
 
-function createPolygon(numSides) { // This can probably be cleaned up a lot.
-	var n = numSides;
-	var r = values.radius;
-	var ang =  2*Math.PI/n;
-	var vertexList = [];
-	for (var i=1; i <= n; i++) {
-		var newVertex = new Point(r*Math.cos(ang*i), -r*Math.sin(ang*i));
-		vertexList.push(newVertex);
-	}
-  var actionPolyGroup = new Group();
-	// Outline of polygon
-  var polygonShadow = new Path({
-    segments: vertexList,
-    closed: true,
-    fillColor: null,
-  });
-  actionPolyGroup.addChild(polygonShadow);
-	// Reflection lines
-	var refLine = new Path([new Point(-(1.5)*r,0), new Point((1.5)*r, 0)]);
-	refLine.strokeColor = "#b1afb3";
-	refLine.dashArray = [10, 12];
-  refLine.selectedColor = "#36ffeb";
-	var rLine = refLine.clone();
-	for (var i=0; i < n; i++) {
-    rLine.onClick = startFlip;
-		rLine.onMouseEnter = function(){this.strokeColor = "#08fff7"}; // Put event handlers into tool?
-		rLine.onMouseLeave = function(){this.strokeColor = "#b1afb3"};
-    actionPolyGroup.addChild(rLine);
-    if (i < n - 1) {
-      rLine = rLine.clone().rotate(180/n);
-    }
-	}
-	refLine.remove();
-	// Group, to be made into symbol and returned.
-	var polyGroup = new Group();
-	var invisibleCircle = new Path.Circle(new Point(0, 0), r);
-	invisibleCircle.opacity = 0;
-	polyGroup.addChild(invisibleCircle);
-	// Create polygon
-	var polygonPath = polygonShadow.clone()
-	polygonPath.style = project.currentStyle; // Polygon style is safer
-	polyGroup.addChild(polygonPath);
-	// Labels
-	for (var i=0; i < vertexList.length; i++) {
-		var vertexPoint = vertexList[i]-new Point(0,0);
-		var vertexLabel = new PointText(vertexPoint*(4/5) + new Point(0,5));
-		vertexLabel.content = i+1;
-    vertexLabel.justification = 'center';
-		vertexLabel.strokeColor = "white";
-		vertexLabel.strokeWidth = 1;
-		polyGroup.addChild(vertexLabel);
-	}
-	var newSymbol = new Symbol(polyGroup);
-	var newSymbolPlaced = newSymbol.place(new Point(0,0));
-	newSymbolPlaced.onMouseDrag = function(event) {
-		var startPt = event.point - event.delta;
-		var startAngle = (startPt).angle;
-		var currentAngle = (event.point).angle;
-		var angleDelt = currentAngle - startAngle;
-		this.rotate(angleDelt);
-	};
-	newSymbolPlaced.onMouseUp = function(event) {
-	  this.rotation = snapTo(this.rotation);
-	};
-	newSymbolPlaced.applyMatrix = true;
-  actionPolyGroup.addChild(newSymbolPlaced);
-	return actionPolyGroup;
-};
+      function createPolygon(numSides) { // This can probably be cleaned up a lot.
+      	var n = numSides;
+      	var r = values.radius;
+      	var ang =  2*Math.PI/n;
+      	var vertexList = [];
+      	for (var i=1; i <= n; i++) {
+      		var newVertex = new Point(r*Math.cos(ang*i), -r*Math.sin(ang*i));
+      		vertexList.push(newVertex);
+      	}
+        var actionPolyGroup = new Group();
+      	// Outline of polygon
+        var polygonShadow = new Path({
+          segments: vertexList,
+          closed: true,
+          fillColor: null,
+        });
+        actionPolyGroup.addChild(polygonShadow);
+      	// Reflection lines
+      	var refLine = new Path([new Point(-(1.5)*r,0), new Point((1.5)*r, 0)]);
+      	refLine.strokeColor = "#b1afb3";
+      	refLine.dashArray = [10, 12];
+        refLine.selectedColor = "#36ffeb";
+      	var rLine = refLine.clone();
+      	for (var i=0; i < n; i++) {
+          rLine.onClick = startFlip;
+      		rLine.onMouseEnter = function(){this.strokeColor = "#08fff7"}; // Put event handlers into tool?
+      		rLine.onMouseLeave = function(){this.strokeColor = "#b1afb3"};
+          actionPolyGroup.addChild(rLine);
+          if (i < n - 1) {
+            rLine = rLine.clone().rotate(180/n);
+          }
+      	}
+      	refLine.remove();
+      	// Group, to be made into symbol and returned.
+      	var polyGroup = new Group();
+      	var invisibleCircle = new Path.Circle(new Point(0, 0), r);
+      	invisibleCircle.opacity = 0;
+      	polyGroup.addChild(invisibleCircle);
+      	// Create polygon
+      	var polygonPath = polygonShadow.clone()
+      	polygonPath.style = project.currentStyle; // Polygon style is safer
+      	polyGroup.addChild(polygonPath);
+      	// Labels
+      	for (var i=0; i < vertexList.length; i++) {
+      		var vertexPoint = vertexList[i]-new Point(0,0);
+      		var vertexLabel = new PointText(vertexPoint*(4/5) + new Point(0,5));
+      		vertexLabel.content = i+1;
+          vertexLabel.justification = 'center';
+      		vertexLabel.strokeColor = "white";
+      		vertexLabel.strokeWidth = 1;
+      		polyGroup.addChild(vertexLabel);
+      	}
+      	var newSymbol = new Symbol(polyGroup);
+      	var newSymbolPlaced = newSymbol.place(new Point(0,0));
+      	newSymbolPlaced.onMouseDrag = function(event) {
+      		var startPt = event.point - event.delta;
+      		var startAngle = (startPt).angle;
+      		var currentAngle = (event.point).angle;
+      		var angleDelt = currentAngle - startAngle;
+      		this.rotate(angleDelt);
+      	};
+      	newSymbolPlaced.onMouseUp = function(event) {
+      	  this.rotation = snapTo(this.rotation);
+      	};
+      	newSymbolPlaced.applyMatrix = true;
+        actionPolyGroup.addChild(newSymbolPlaced);
+      	return actionPolyGroup;
+      };
 
-function startFlip(event) {
-  var myAngle = snapTo((event.point - polySymbol.position).angle, 2*values.numSides); // This should be a more general animation player.
-  polySymbol.onFrame = function(e) {
-    var i = e.count;
-    var n = 13; // Timeout at n=13.
-    if (i >= n) {
-      polySymbol.onFrame = null;
-      return;
-    }
-    var oldScale = 1 - (2/n)*i;
-    var newScale = 1 - (2/n)*(i + 1);
-    var lambda = newScale/oldScale;
-    var shift = polySymbol.position;
-  	polySymbol.position = new Point(0,0);
-  	polySymbol.matrix.prepend(matrixReflect(myAngle, lambda)); // This still feels clunky / badly organized.
-  	polySymbol.position = shift;
-  }
-}
+      function startFlip(event) {
+        var myAngle = snapTo((event.point - polySymbol.position).angle, 2*values.numSides); // This should be a more general animation player.
+        polySymbol.onFrame = function(e) {
+          var i = e.count;
+          var n = 13; // Timeout at n=13.
+          if (i >= n) {
+            polySymbol.onFrame = null;
+            return;
+          }
+          var oldScale = 1 - (2/n)*i;
+          var newScale = 1 - (2/n)*(i + 1);
+          var lambda = newScale/oldScale;
+          var shift = polySymbol.position;
+        	polySymbol.position = new Point(0,0);
+        	polySymbol.matrix.prepend(matrixReflect(myAngle, lambda)); // This still feels clunky / badly organized.
+        	polySymbol.position = shift;
+        }
+      }
 
-function startFlip(event) {
-  var myAngle = snapTo((event.point - polySymbol.position).angle, 2*values.numSides); // More general animation player?
-  polySymbol.onFrame = function(e) {
-    var i = e.count;
-    var timeout = 13; // Timeout at n=13. Must be odd to avoid hitting zero!
-    if (i >= timeout) {
-      polySymbol.onFrame = null;
-      return;
-    }
-    var oldScale = 1 - (2/timeout)*i; // Or old rotation and new rotation.
-    var newScale = 1 - (2/timeout)*(i + 1);
-    var lambda = newScale/oldScale;
-    flip(polySymbol, myAngle, lambda); // Or partial rotation.
-  }
-}
+      function startFlip(event) {
+        var myAngle = snapTo((event.point - polySymbol.position).angle, 2*values.numSides); // More general animation player?
+        polySymbol.onFrame = function(e) {
+          var i = e.count;
+          var timeout = 13; // Timeout at n=13. Must be odd to avoid hitting zero!
+          if (i >= timeout) {
+            polySymbol.onFrame = null;
+            return;
+          }
+          var oldScale = 1 - (2/timeout)*i; // Or old rotation and new rotation.
+          var newScale = 1 - (2/timeout)*(i + 1);
+          var lambda = newScale/oldScale;
+          flip(polySymbol, myAngle, lambda); // Or partial rotation.
+        }
+      }
 
-function flip(ngon, theta, lambda) {
-  var shift = ngon.position;
-  ngon.position = new Point(0,0);
-  ngon.matrix.prepend(matrixReflect(theta, lambda)); // This still feels clunky / badly organized.
-  ngon.position = shift;
-}
+      function flip(ngon, theta, lambda) {
+        var shift = ngon.position;
+        ngon.position = new Point(0,0);
+        ngon.matrix.prepend(matrixReflect(theta, lambda)); // This still feels clunky / badly organized.
+        ngon.position = shift;
+      }
 
-function matrixReflect(theta, lambda) {  // Rename
-  theta *= Math.PI/180;
-  var c = Math.cos(theta);
-  var s = Math.sin(theta);
-  var scaleMatrix = new Matrix(c*c+lambda*s*s, (1-lambda)*c*s, (1-lambda)*c*s, s*s + lambda*c*c,0,0);
-  return scaleMatrix;
-}
+      function matrixReflect(theta, lambda) {  // Rename
+        theta *= Math.PI/180;
+        var c = Math.cos(theta);
+        var s = Math.sin(theta);
+        var scaleMatrix = new Matrix(c*c+lambda*s*s, (1-lambda)*c*s, (1-lambda)*c*s, s*s + lambda*c*c,0,0);
+        return scaleMatrix;
+      }
 
-function matrixRotate(theta) {
-	theta = theta*2*Math.PI/360;
-	var c = Math.cos(theta);
-	var s = Math.sin(theta);
-	return new Matrix(c,-s,s,c,0,0);
-}
+      function matrixRotate(theta) {
+      	theta = theta*2*Math.PI/360;
+      	var c = Math.cos(theta);
+      	var s = Math.sin(theta);
+      	return new Matrix(c,-s,s,c,0,0);
+      }
 
-function onMouseMove(event) {
-	project.activeLayer.selected = false;
-	return;
-}
+      function onMouseMove(event) {
+      	project.activeLayer.selected = false;
+      	return;
+      }
 
-function snapTo(rotation, divider) {
-	if (!divider) {
-		divider = values.numSides;
-	}
-	var angl = 360/divider;
-	return Math.round(rotation / angl) * angl;
-}
+      function snapTo(rotation, divider) {
+      	if (!divider) {
+      		divider = values.numSides;
+      	}
+      	var angl = 360/divider;
+      	return Math.round(rotation / angl) * angl;
+      }
 
-function updateWindowDisplay() {
-	var dispStr = "String";
-	globals.setText(dispStr);
-}
+      function updateWindowDisplay() {
+      	var dispStr = "String";
+      	globals.setText(dispStr);
+      }
 
-function setGlobals() {
-	globals.numSides = values.numSides;
-  globals.updateDisplay = updateWindowDisplay;
-  globals.refreshCanvas = function() {
-    project.clear();
-    values.numSides = globals.numSides;
-    loadCanvas();
-  }
-}
-</script>
-<script type="text/javascript">
-window.globals = {
-  setText: function(displayString) {
-		document.getElementById("textDisplay").innerHTML = displayString;
-	},
-};
-window.onload = function() {
-  document.getElementById('refreshButton').onclick = function() {
-    window.globals.refreshCanvas();
-  };
-	document.getElementById('numSidesInput').value = globals.numSides;
-  document.getElementById('numSidesInput').onchange = function() {
-    globals.numSides = document.getElementById('numSidesInput').value;
-  };
-};
-</script>
-</head>
-<body>
-  <div class="topnav">
-    <a href="about.html">About</a>
-    <a href="braids.html">Braids</a>
-    <a href="commutative-diagram.html">Snake Lemma</a>
-    <a href="dihedral.html">Dihedral group</a>
-    <a href="graphs.html">Graph theory</a>
-    <a href="siegelPlane.html">Siegel Plane</a>
-    <a href="topology.html">Topology</a>
-  </div>
-<div class="row">
-  <div class="column side">
-    <h2>Dihedral group</h2>
-    <p>A <b>dihedral group</b> is the group of symmetries of a regular polygon.
-    <h3>How to Use</h3>
-    Click and drag to rotate the polygon. Click on the dashed lines to reflect.</p>
-    <h3>Settings</h3>
-    <div>
-    	<label>N: </label>
-    	<input type="number" min="3" max="10" id="numSidesInput">
-    	<button id="refreshButton"> Make N-gon </button>
-    	<p id="textDisplay"></p>
+      function setGlobals() {
+      	globals.numSides = values.numSides;
+        globals.updateDisplay = updateWindowDisplay;
+        globals.refreshCanvas = function() {
+          project.clear();
+          values.numSides = globals.numSides;
+          loadCanvas();
+        }
+      }
+    </script>
+    <script type="text/javascript">
+      window.globals = {
+        setText: function (displayString) {
+          document.getElementById("textDisplay").innerHTML = displayString;
+        },
+      };
+      window.onload = function () {
+        document.getElementById("refreshButton").onclick = function () {
+          window.globals.refreshCanvas();
+        };
+        document.getElementById("numSidesInput").value = globals.numSides;
+        document.getElementById("numSidesInput").onchange = function () {
+          globals.numSides = document.getElementById("numSidesInput").value;
+        };
+      };
+    </script>
+  </head>
+  <body>
+    <div class="topnav">
+      <a href="about.html">About</a>
+      <a href="braids.html">Braids</a>
+      <a href="commutative-diagram.html">Snake Lemma</a>
+      <a href="dihedral.html">Dihedral group</a>
+      <a href="graphs.html">Graph theory</a>
+      <a href="siegelPlane.html">Siegel Plane</a>
+      <a href="topology.html">Topology</a>
     </div>
-  </div>
-<div class="column middle">
-	<canvas id="myCanvas" width="600" height="500" style="border:1px solid #000">
-		This text is displayed if your browser does not support HTML5.
-	</canvas>
-</div>
-</div>
-</body>
+    <div class="row">
+      <div class="column side">
+        <h2>Dihedral group</h2>
+        <p>
+          A <b>dihedral group</b> is the group of symmetries of a regular
+          polygon.
+        </p>
+        <h3>How to Use</h3>
+        <p>
+          Click and drag to rotate the polygon. Click on the dashed lines to
+          reflect.
+        </p>
+        <h3>Settings</h3>
+        <div>
+          <label>N: </label>
+          <input type="number" min="3" max="10" id="numSidesInput" />
+          <button id="refreshButton">Make N-gon</button>
+          <p id="textDisplay"></p>
+        </div>
+      </div>
+      <div class="column middle">
+        <canvas
+          id="myCanvas"
+          width="600"
+          height="500"
+          style="border: 1px solid #000"
+        >
+          This text is displayed if your browser does not support HTML5.
+        </canvas>
+      </div>
+    </div>
+  </body>
 </html>

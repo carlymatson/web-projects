@@ -1,279 +1,296 @@
 <!DOCTYPE html>
 <html>
-<head>
-	<title> Braid Groups </title>
-  <link rel="stylesheet" href="mathsketchpad.css">
-  <script type="text/javascript" src="js/paper.js"></script>
-  <script type="text/paperscript" canvas="myCanvas">
+  <head>
+    <title>Braid Groups</title>
+    <link rel="stylesheet" href="mathsketchpad.css" />
+    <script type="text/javascript" src="js/paper.js"></script>
+    <script type="text/paperscript" canvas="myCanvas">
 
-	var hitOptions = {
-		fill: true,
-		stroke: true,
-		segments: true,
-		tolerance: 5
-	};
+      	var hitOptions = {
+      		fill: true,
+      		stroke: true,
+      		segments: true,
+      		tolerance: 5
+      	};
 
-project.currentStyle = {
-    strokeColor: 'black',
-    strokeWidth: 10,
-		strokeJoin: 'round'
-}
+      project.currentStyle = {
+          strokeColor: 'black',
+          strokeWidth: 10,
+      		strokeJoin: 'round'
+      }
 
-var braidStyle = {
-	strokeWidth: 10,
-	strokeJoin: 'round'
-}
+      var braidStyle = {
+      	strokeWidth: 10,
+      	strokeJoin: 'round'
+      }
 
-var values = {numStrands: 3};
+      var values = {numStrands: 3};
 
-setGlobals();
+      setGlobals();
 
-var whiteBackground = new Path.Rectangle(view.bounds);
-whiteBackground.fillColor = "white";
-whiteBackground.strokeColor = "white";
-whiteBackground.locked = true;
+      var whiteBackground = new Path.Rectangle(view.bounds);
+      whiteBackground.fillColor = "white";
+      whiteBackground.strokeColor = "white";
+      whiteBackground.locked = true;
 
-var colors = ["#ff884d", "#ff4dea", "#28ed6a", "#8e3afc", "#ffeb0a", "#4763ff"];
-var firstBraid = emptyBraid(values.numStrands, new Point(250,50), new Size(values.numStrands*30,400));
-var overStrands = new Group();
-var currentBuffer;
-var currentOverpath;
+      var colors = ["#ff884d", "#ff4dea", "#28ed6a", "#8e3afc", "#ffeb0a", "#4763ff"];
+      var firstBraid = emptyBraid(values.numStrands, new Point(250,50), new Size(values.numStrands*30,400));
+      var overStrands = new Group();
+      var currentBuffer;
+      var currentOverpath;
 
-function emptyBraid(nStrands, pos, size) {
-	var xDel = size.width / (nStrands-1);
-	var landscapeMode = false;
-	var strands = new Group();
-	var crossovers = new Group();
-	//var braidGroup = new Group([strands, crossovers]);
-	for (var i = 0; i < nStrands; i++) {
-		var topPoint = new Point(pos.x + xDel*i, pos.y);
-		var topPeg = new Path.Circle(topPoint, 8);
-		topPeg.strokeColor = colors[i];
-		topPeg.fillColor = colors[i];
-		var strand = new Path([topPoint, topPoint + new Point(0, size.height)]);
-		strand.strokeColor = colors[i];
-		strands.overs = [];
-		strands.addChild(strand);
-	}
-	var newBraid = {landscape: landscapeMode, strands: strands, crossovers: [], genList: [], yList: []};
-	//newBraid.strands.selected = true;
-	return newBraid;
-}
+      function emptyBraid(nStrands, pos, size) {
+      	var xDel = size.width / (nStrands-1);
+      	var landscapeMode = false;
+      	var strands = new Group();
+      	var crossovers = new Group();
+      	//var braidGroup = new Group([strands, crossovers]);
+      	for (var i = 0; i < nStrands; i++) {
+      		var topPoint = new Point(pos.x + xDel*i, pos.y);
+      		var topPeg = new Path.Circle(topPoint, 8);
+      		topPeg.strokeColor = colors[i];
+      		topPeg.fillColor = colors[i];
+      		var strand = new Path([topPoint, topPoint + new Point(0, size.height)]);
+      		strand.strokeColor = colors[i];
+      		strands.overs = [];
+      		strands.addChild(strand);
+      	}
+      	var newBraid = {landscape: landscapeMode, strands: strands, crossovers: [], genList: [], yList: []};
+      	//newBraid.strands.selected = true;
+      	return newBraid;
+      }
 
-function buffer(strand, index) {
-	var curve = strand.curves[index];
-	var point1 = curve.getLocationAt(15);
-	var point2 = curve.getLocationAt(curve.length - 15);
-	currentBuffer = new Path([point1, point2]);
-	currentBuffer.strokeWidth = 16;
-	currentBuffer.strokeColor = "white";
-	currentOverpath = new Path([point1, point2]);
-	currentOverpath.strokeColor = strand.strokeColor;
-}
+      function buffer(strand, index) {
+      	var curve = strand.curves[index];
+      	var point1 = curve.getLocationAt(15);
+      	var point2 = curve.getLocationAt(curve.length - 15);
+      	currentBuffer = new Path([point1, point2]);
+      	currentBuffer.strokeWidth = 16;
+      	currentBuffer.strokeColor = "white";
+      	currentOverpath = new Path([point1, point2]);
+      	currentOverpath.strokeColor = strand.strokeColor;
+      }
 
-function keepInBounds(pt, rect) {
-	if (pt.x < rect.left) {
-		pt.x = rect.left;
-	} else if (pt.x > rect.right) {
-		pt.x = rect.right;
-	}
-	if (pt.y < rect.top) {
-		pt.y = rect.top;
-	} else if (pt.y > rect.bottom) {
-		pt.y = rect.bottom;
-	}
-	return pt;
-}
+      function keepInBounds(pt, rect) {
+      	if (pt.x < rect.left) {
+      		pt.x = rect.left;
+      	} else if (pt.x > rect.right) {
+      		pt.x = rect.right;
+      	}
+      	if (pt.y < rect.top) {
+      		pt.y = rect.top;
+      	} else if (pt.y > rect.bottom) {
+      		pt.y = rect.bottom;
+      	}
+      	return pt;
+      }
 
-function snapToGrid(pt, rect, size) {
-	var newPt = pt;
-	if (!rect.contains(newPt)) {
-		newPt = keepInBounds(newPt, rect);
-	}
-	var left = rect.left;
-	var top = rect.top;
-	newPt.x = Math.round((newPt.x-left)/size.width)*size.width+left;
-	newPt.y = Math.round((newPt.y-top)/size.height)*size.height+top;
-	return newPt;
-}
+      function snapToGrid(pt, rect, size) {
+      	var newPt = pt;
+      	if (!rect.contains(newPt)) {
+      		newPt = keepInBounds(newPt, rect);
+      	}
+      	var left = rect.left;
+      	var top = rect.top;
+      	newPt.x = Math.round((newPt.x-left)/size.width)*size.width+left;
+      	newPt.y = Math.round((newPt.y-top)/size.height)*size.height+top;
+      	return newPt;
+      }
 
-function penultimateSeg(strand) {
-	return strand.segments[strand.segments.length - 2];
-}
+      function penultimateSeg(strand) {
+      	return strand.segments[strand.segments.length - 2];
+      }
 
-function fixTail(strand) {
-	var lastSeg = strand.lastSegment;
-	lastSeg.point.x = lastSeg.previous.point.x;
-}
+      function fixTail(strand) {
+      	var lastSeg = strand.lastSegment;
+      	lastSeg.point.x = lastSeg.previous.point.x;
+      }
 
-function crossIfNeeded(newPt, segment) {
-	var strand = segment.path;
-	var hitResults = strand.parent.hitTestAll(newPt, hitOptions);
-	if (hitResults.length > 1) {
-		var sib = hitResults[0].item;
-		if (sib == strand) {
-			sib = hitResults[1].item;
-		}
-		if (newPt.y < penultimateSeg(sib).point.y + 20) {
-			return false;
-		}
-		passUnder(segment, sib);
-		return true;
-	}
-	return false;
-}
+      function crossIfNeeded(newPt, segment) {
+      	var strand = segment.path;
+      	var hitResults = strand.parent.hitTestAll(newPt, hitOptions);
+      	if (hitResults.length > 1) {
+      		var sib = hitResults[0].item;
+      		if (sib == strand) {
+      			sib = hitResults[1].item;
+      		}
+      		if (newPt.y < penultimateSeg(sib).point.y + 20) {
+      			return false;
+      		}
+      		passUnder(segment, sib);
+      		return true;
+      	}
+      	return false;
+      }
 
-function passUnder(seg, strand2) {
-	var xDel = strand2.parent.bounds.width / (strand2.parent.children.length-1);
-	var strand1 = seg.path;
-	var prev1 = seg.previous;
-	var prev2 = penultimateSeg(strand2);
-	var index2 = prev2.index;
-	if (prev1.point.x < prev2.point.x) {
-		xDel = -xDel;
-	}
-  if (prev1.point.y < prev2.point.y) {
-		strand1.insert(prev1.index+1, new Point(prev1.point.x, prev2.point.y));
-	} else if (prev1.point.y > prev2.point.y) {
-		strand2.insert(index2+1, new Point(prev2.point.x, prev1.point.y));
-		index2 += 1;
-	}
-	strand2.insert(index2+1, new Point(prev2.point.x + xDel, seg.point.y));
-	fixTail(strand2);
-}
+      function passUnder(seg, strand2) {
+      	var xDel = strand2.parent.bounds.width / (strand2.parent.children.length-1);
+      	var strand1 = seg.path;
+      	var prev1 = seg.previous;
+      	var prev2 = penultimateSeg(strand2);
+      	var index2 = prev2.index;
+      	if (prev1.point.x < prev2.point.x) {
+      		xDel = -xDel;
+      	}
+        if (prev1.point.y < prev2.point.y) {
+      		strand1.insert(prev1.index+1, new Point(prev1.point.x, prev2.point.y));
+      	} else if (prev1.point.y > prev2.point.y) {
+      		strand2.insert(index2+1, new Point(prev2.point.x, prev1.point.y));
+      		index2 += 1;
+      	}
+      	strand2.insert(index2+1, new Point(prev2.point.x + xDel, seg.point.y));
+      	fixTail(strand2);
+      }
 
-var strand, segment;
-function onMouseDown(event) {
-	segment = strand = null;
-	var hitResult = project.hitTest(event.point, hitOptions);
-	if (!hitResult) {
-		return;
-	}
-	strand = hitResult.item;
-	if (hitResult.type == "stroke") {
-		var location = hitResult.location;
-		if (location.index + 1  != strand.curves.length) {
-			return;
-		}
-		segment = strand.insert(location.index + 1, event.point);
-		var xDel = strand.parent.bounds.width / (strand.parent.children.length-1);
-		anchor = snapToGrid(hitResult.point, strand.parent.bounds, new Size(xDel,1));
-		//segment.path.parent.selected = true;
-		buffer(strand, segment.index-1);
-	}
-  return;
-}
+      var strand, segment;
+      function onMouseDown(event) {
+      	segment = strand = null;
+      	var hitResult = project.hitTest(event.point, hitOptions);
+      	if (!hitResult) {
+      		return;
+      	}
+      	strand = hitResult.item;
+      	if (hitResult.type == "stroke") {
+      		var location = hitResult.location;
+      		if (location.index + 1  != strand.curves.length) {
+      			return;
+      		}
+      		segment = strand.insert(location.index + 1, event.point);
+      		var xDel = strand.parent.bounds.width / (strand.parent.children.length-1);
+      		anchor = snapToGrid(hitResult.point, strand.parent.bounds, new Size(xDel,1));
+      		//segment.path.parent.selected = true;
+      		buffer(strand, segment.index-1);
+      	}
+        return;
+      }
 
-function onMouseDrag(event) {
-	if (segment) {
-		var bnds = segment.path.parent.bounds.clone();
-		var yTop = segment.previous.point.y;
-		bnds = new Rectangle(new Point(bnds.left, yTop), bnds.bottomRight);
-		var xDel = bnds.width / (segment.path.parent.children.length - 1);
-		var newPt = keepInBounds(event.point, bnds);
-		segment.point = newPt;
-		fixTail(strand);
-		crossIfNeeded(newPt, segment);
-		currentBuffer.remove();
-		currentOverpath.remove();
-		buffer(strand, segment.index-1);
-	}
-  return;
-}
+      function onMouseDrag(event) {
+      	if (segment) {
+      		var bnds = segment.path.parent.bounds.clone();
+      		var yTop = segment.previous.point.y;
+      		bnds = new Rectangle(new Point(bnds.left, yTop), bnds.bottomRight);
+      		var xDel = bnds.width / (segment.path.parent.children.length - 1);
+      		var newPt = keepInBounds(event.point, bnds);
+      		segment.point = newPt;
+      		fixTail(strand);
+      		crossIfNeeded(newPt, segment);
+      		currentBuffer.remove();
+      		currentOverpath.remove();
+      		buffer(strand, segment.index-1);
+      	}
+        return;
+      }
 
-function onMouseUp(event) {
-	if (segment) {
-		var xDel = strand.parent.bounds.width / (strand.parent.children.length - 1);
-		var newPt = snapToGrid(event.point, strand.parent.bounds, new Size(xDel,1));
-		segment.point = newPt;
-		var crossed = crossIfNeeded(newPt, segment);
-		var noChange = (newPt.x == segment.previous.point.x);
-		if (noChange) {
-			segment.remove();
-		}
-		fixTail(strand);
-		currentBuffer.remove();
-		currentOverpath.remove();
-		if (!noChange) {
-			buffer(strand, segment.index-1);
-		}
-		strand = segment = null;
-	}
-}
+      function onMouseUp(event) {
+      	if (segment) {
+      		var xDel = strand.parent.bounds.width / (strand.parent.children.length - 1);
+      		var newPt = snapToGrid(event.point, strand.parent.bounds, new Size(xDel,1));
+      		segment.point = newPt;
+      		var crossed = crossIfNeeded(newPt, segment);
+      		var noChange = (newPt.x == segment.previous.point.x);
+      		if (noChange) {
+      			segment.remove();
+      		}
+      		fixTail(strand);
+      		currentBuffer.remove();
+      		currentOverpath.remove();
+      		if (!noChange) {
+      			buffer(strand, segment.index-1);
+      		}
+      		strand = segment = null;
+      	}
+      }
 
-function updateWindowDisplay() {
-	return;
-}
+      function updateWindowDisplay() {
+      	return;
+      }
 
-function refreshBraid(newNumStrands) {
-  project.clear();
-	var whiteBackground = new Path.Rectangle(view.bounds);
-	whiteBackground.fillColor = "white";
-	whiteBackground.strokeColor = "white";
-	whiteBackground.locked = true;
-	values.numStrands = newNumStrands;
-	firstBraid = emptyBraid(values.numStrands, new Point(250,50), new Size(values.numStrands*30,400));
-}
+      function refreshBraid(newNumStrands) {
+        project.clear();
+      	var whiteBackground = new Path.Rectangle(view.bounds);
+      	whiteBackground.fillColor = "white";
+      	whiteBackground.strokeColor = "white";
+      	whiteBackground.locked = true;
+      	values.numStrands = newNumStrands;
+      	firstBraid = emptyBraid(values.numStrands, new Point(250,50), new Size(values.numStrands*30,400));
+      }
 
-function setGlobals() {
-	globals.numStrands = values.numStrands;
-  globals.updateDisplay = updateWindowDisplay;
-	globals.refreshCanvas = refreshBraid;
-	globals.setNumStrands  =  function(n) {
-		values.numStrands =  n;
-	};
-}
-
-</script>
-<script type="text/javascript">
-window.globals = {
-  setText: function(displayString) {
-		document.getElementById("textDisplay").innerHTML = displayString;
-	},
-};
-window.onload = function() {
-  document.getElementById('refreshButton').onclick = function() {
-    window.globals.refreshCanvas(document.getElementById('numStrandsInput').value);
-  };
-	document.getElementById('numStrandsInput').value = globals.numStrands;
-};
-</script>
-</head>
-<body>
-	<div class="topnav">
-		<a href="about.html">About</a>
-		<a href="braids.html">Braids</a>
-		<a href="commutative-diagram.html">Snake Lemma</a>
-		<a href="dihedral.html">Dihedral group</a>
-    <a href="graphs.html">Graph theory</a>
-		<a href="siegelPlane.html">Siegel Plane</a>
-	  <a href="topology.html">Topology</a>
-	</div>
-  <div>
-<div class="row">
-	<div class="column side">
-		<h2>Braid group</h2>
-		<p>The <b>braid group</b> on <i>n</i> strands is the group whose elements are
-		equivalence classes of braids and whose group operation is composition of braids end to end.</p>
-		<p>Two braids are equivalent if one can be transformed into the other without undoing the braid or having strands pass through each other.</p>
-		<p>The <b>identity</b> element is the trivial braid, in which the strands do not cross at all.
-			<br>
-		The <b>inverse</b> of a braid is given by its reflection over the horizontal bottom edge of that braid.</p>
-		<h3>How to Use</h3>
-    <p> Click and drag the strands to interweave them.</p>
-		<h3>Settings</h3>
-		<div>
-			<label>n: </label>
-			<input type="number" min="1" max="6" id="numStrandsInput">
-			<button id="refreshButton"> Make n-braid </button>
-			<p id="textDisplay"></p>
-		</div>
-	</div>
-  <div class="column middle">
-	  <canvas id="myCanvas" width="600" height="500" style="border:1px solid #000">
-		  This text is displayed if your browser does not support HTML5.
-	  </canvas>
-  </div>
-</div>
-</body>
+      function setGlobals() {
+      	globals.numStrands = values.numStrands;
+        globals.updateDisplay = updateWindowDisplay;
+      	globals.refreshCanvas = refreshBraid;
+      	globals.setNumStrands  =  function(n) {
+      		values.numStrands =  n;
+      	};
+      }
+    </script>
+    <script type="text/javascript">
+      window.globals = {
+        setText: function (displayString) {
+          document.getElementById("textDisplay").innerHTML = displayString;
+        },
+      };
+      window.onload = function () {
+        document.getElementById("refreshButton").onclick = function () {
+          window.globals.refreshCanvas(
+            document.getElementById("numStrandsInput").value
+          );
+        };
+        document.getElementById("numStrandsInput").value = globals.numStrands;
+      };
+    </script>
+  </head>
+  <body>
+    <div class="topnav">
+      <a href="about.html">About</a>
+      <a href="braids.html">Braids</a>
+      <a href="commutative-diagram.html">Snake Lemma</a>
+      <a href="dihedral.html">Dihedral group</a>
+      <a href="graphs.html">Graph theory</a>
+      <a href="siegelPlane.html">Siegel Plane</a>
+      <a href="topology.html">Topology</a>
+    </div>
+    <div>
+      <div class="row">
+        <div class="column side">
+          <h2>Braid group</h2>
+          <p>
+            The <b>braid group</b> on <i>n</i> strands is the group whose
+            elements are equivalence classes of braids and whose group operation
+            is composition of braids end to end.
+          </p>
+          <p>
+            Two braids are equivalent if one can be transformed into the other
+            without undoing the braid or having strands pass through each other.
+          </p>
+          <p>
+            The <b>identity</b> element is the trivial braid, in which the
+            strands do not cross at all.
+            <br />
+            The <b>inverse</b> of a braid is given by its reflection over the
+            horizontal bottom edge of that braid.
+          </p>
+          <h3>How to Use</h3>
+          <p>Click and drag the strands to interweave them.</p>
+          <h3>Settings</h3>
+          <div>
+            <label>n: </label>
+            <input type="number" min="1" max="6" id="numStrandsInput" />
+            <button id="refreshButton">Make n-braid</button>
+            <p id="textDisplay"></p>
+          </div>
+        </div>
+        <div class="column middle">
+          <canvas
+            id="myCanvas"
+            width="600"
+            height="500"
+            style="border: 1px solid #000"
+          >
+            This text is displayed if your browser does not support HTML5.
+          </canvas>
+        </div>
+      </div>
+    </div>
+  </body>
 </html>

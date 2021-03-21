@@ -1,172 +1,177 @@
 <!DOCTYPE html>
 <html>
-<head>
-<script type="text/javascript" src="js/paper.js"></script>
-<script type="text/paperscript" canvas="myCanvas">
+  <head>
+    <script type="text/javascript" src="js/paper.js"></script>
+    <script type="text/paperscript" canvas="myCanvas">
 
-project.currentStyle = {
-	strokeColor: "black",
-	strokeWidth: 4,
-	fillColor: "#651dad"
-}
+      project.currentStyle = {
+      	strokeColor: "black",
+      	strokeWidth: 4,
+      	fillColor: "#651dad"
+      }
 
-var hitOptions = {
-fill: true,
-stroke: true,
-segments: true,
-handles: true,
-tolerance: 5
-};
+      var hitOptions = {
+      fill: true,
+      stroke: true,
+      segments: true,
+      handles: true,
+      tolerance: 5
+      };
 
-setGlobals();
-
-
-var background = new Path.Rectangle(new Point(0,0), view.size);
-background.locked = true;
-background.fillColor = "#8cfdff";
-var disc1 = new Path.Circle(new Point(150,200), 130);
-var disc2 = disc1.clone();
-disc2.position += new Point(300,0);
-var pStar = new Path.Star(new Point(250,210), 5, 80, 40);
-var loc = pStar.getLocationAt(20);
-var newPath = pStar.split(loc);
-newPath = newPath.split(newPath.getLocationAt(newPath.length - 80));
-newPath.strokeColor = "red";
-
-var myPoint = new Point(50,50);
-var point2 = myPoint;
-var ptList = [myPoint, point2];
-var ob1 = {key1: 3, key2:5};
-var testList = [ob1];
-ob1.key1 = 7;
-console.log(testList);
-var discPoint = new Path.Circle(myPoint, 10);
-myPoint += new Point(20,20);
-console.log(point2);
-console.log(discPoint);
-console.log(ptList);
-var myObject = {myList:ptList};
-ptList.push(point2);
-console.log(myObject);
+      setGlobals();
 
 
-//var gp = new Group(disc1.unite(disc2),background, pStar);
-//disc1.remove();
-//disc2.remove();
-//gp.clipped = true;
+      var background = new Path.Rectangle(new Point(0,0), view.size);
+      background.locked = true;
+      background.fillColor = "#8cfdff";
+      var disc1 = new Path.Circle(new Point(150,200), 130);
+      var disc2 = disc1.clone();
+      disc2.position += new Point(300,0);
+      var pStar = new Path.Star(new Point(250,210), 5, 80, 40);
+      var loc = pStar.getLocationAt(20);
+      var newPath = pStar.split(loc);
+      newPath = newPath.split(newPath.getLocationAt(newPath.length - 80));
+      newPath.strokeColor = "red";
 
-// Create an empty raster placed at view center.
-//var raster = new Raster(new Size(28, 28), view.center);
+      var myPoint = new Point(50,50);
+      var point2 = myPoint;
+      var ptList = [myPoint, point2];
+      var ob1 = {key1: 3, key2:5};
+      var testList = [ob1];
+      ob1.key1 = 7;
+      console.log(testList);
+      var discPoint = new Path.Circle(myPoint, 10);
+      myPoint += new Point(20,20);
+      console.log(point2);
+      console.log(discPoint);
+      console.log(ptList);
+      var myObject = {myList:ptList};
+      ptList.push(point2);
+      console.log(myObject);
 
-// For all of its pixels...
-//for (var i = 0; i < 28; i++) {
-//    for (var j = 0; j < 28; j++) {
-//        // ...set a random color.
-//        raster.setPixel(i, j, Color.random());
-//    }
-//}
-//console.log(raster);
 
-var dragItem;
-function onMouseDown(event) {
-	dragItem = null;
-	hitResult = project.hitTest(event.point, hitOptions);
-	if (!hitResult) {
-		return;
-	}
-	dragItem = hitResult.item;
-	if (hitResult.type == "segment") {
-		var seg =  hitResult.segment;
-	}
-}
+      //var gp = new Group(disc1.unite(disc2),background, pStar);
+      //disc1.remove();
+      //disc2.remove();
+      //gp.clipped = true;
 
-function updateDependencies(myItem) {
-	var deps = myItem.dependencies;
-	if (!deps) {
-		return;
-	}
-}
+      // Create an empty raster placed at view center.
+      //var raster = new Raster(new Size(28, 28), view.center);
 
-function onMouseDrag(event) {
-	console.log(dragItem);
-	if (!dragItem) {
-		return;
-	}
-	if (dragItem.point) {
-		dragItem.point += event.delta;
-	} else if (dragItem.position) {
-		dragItem.position += event.delta;
-	}
-}
+      // For all of its pixels...
+      //for (var i = 0; i < 28; i++) {
+      //    for (var j = 0; j < 28; j++) {
+      //        // ...set a random color.
+      //        raster.setPixel(i, j, Color.random());
+      //    }
+      //}
+      //console.log(raster);
 
-function undo() {
-	window.alert("No undo function implemented");
-	return;
-}
+      var dragItem;
+      function onMouseDown(event) {
+      	dragItem = null;
+      	hitResult = project.hitTest(event.point, hitOptions);
+      	if (!hitResult) {
+      		return;
+      	}
+      	dragItem = hitResult.item;
+      	if (hitResult.type == "segment") {
+      		var seg =  hitResult.segment;
+      	}
+      }
 
-function updateWindowDisplay() {
-	return;
-}
+      function updateDependencies(myItem) {
+      	var deps = myItem.dependencies;
+      	if (!deps) {
+      		return;
+      	}
+      }
 
-function setGlobals() {
-  globals.updateDisplay = updateWindowDisplay;
-	globals.undo = undo;
-	globals.setFillColor = function(color) {
-		project.currentStyle.fillColor = color;
-	};
-	globals.setStrokeColor = function(color) {
-		project.currentStyle.strokeColor = color;
-	};
-	globals.setStrokeWidth = function(strokeWidth) {
-		project.currentStyle.strokeWidth = strokeWidth;
-	};
-}
-</script>
-<script type="text/javascript">
-window.globals = {
-  setText: function(displayString) {
-		document.getElementById("textDisplay").innerHTML = displayString;
-	},
-};
-window.onload = function() {
-	window.globals.updateDisplay();
-  document.getElementById('undoBtn').onclick = function() {
-    window.globals.undo();
-  };
-	document.getElementById('fillColorInput').onchange = function() {
-    window.globals.setFillColor(document.getElementById('fillColorInput').value);
-  };
-	document.getElementById('strokeWidthInput').onchange = function() {
-    window.globals.setStrokeWidth(document.getElementById('strokeWidthInput').value);
-  };
-};
-var mySave = '[["dictionary",{"#17":["SymbolDefinition",["Group",{"applyMatrix":true,"children":[["Path",{"applyMatrix":true,"opacity":0,"segments":[[[-100,0],[0,55.22847],[0,-55.22847]],[[0,-100],[-55.22847,0],[55.22847,0]],[[100,0],[0,-55.22847],[0,55.22847]],[[0,100],[55.22847,0],[-55.22847,0]]],"closed":true,"fillColor":[0.50196,0,0.50196],"strokeColor":[0,0,0],"strokeWidth":4}],["Path",{"applyMatrix":true,"segments":[[30.9017,-95.10565],[-80.9017,-58.77853],[-80.9017,58.77853],[30.9017,95.10565],[100,0]],"closed":true,"fillColor":[0.50196,0,0.50196],"strokeColor":[0,0,0],"strokeWidth":4}],["PointText",{"applyMatrix":false,"matrix":[1,0,0,1,19.72136,-71.08452],"content":"1","fillColor":[0.50196,0,0.50196],"strokeColor":[1,1,1],"fontFamily":"Courier New","fontSize":"15px","leading":18}],["PointText",{"applyMatrix":false,"matrix":[1,0,0,1,-69.72136,-42.02282],"content":"2","fillColor":[0.50196,0,0.50196],"strokeColor":[1,1,1],"fontFamily":"Courier New","fontSize":"15px","leading":18}],["PointText",{"applyMatrix":false,"matrix":[1,0,0,1,-69.72136,52.02282],"content":"3","fillColor":[0.50196,0,0.50196],"strokeColor":[1,1,1],"fontFamily":"Courier New","fontSize":"15px","leading":18}],["PointText",{"applyMatrix":false,"matrix":[1,0,0,1,19.72136,81.08452],"content":"4","fillColor":[0.50196,0,0.50196],"strokeColor":[1,1,1],"fontFamily":"Courier New","fontSize":"15px","leading":18}],["PointText",{"applyMatrix":false,"matrix":[1,0,0,1,75,5],"content":"5","fillColor":[0.50196,0,0.50196],"strokeColor":[1,1,1],"fontFamily":"Courier New","fontSize":"15px","leading":18}]]}]]}],[["Layer",{"applyMatrix":true,"children":[["Path",{"applyMatrix":true,"segments":[[330.9017,154.89435],[219.0983,191.22147],[219.0983,308.77853],[330.9017,345.10565],[400,250]],"closed":true,"strokeColor":[0,0,0],"strokeWidth":4}],["Path",{"applyMatrix":true,"segments":[[150,250],[450,250]],"fillColor":[0.50196,0,0.50196],"strokeColor":[0.69412,0.68627,0.70196],"strokeWidth":4,"dashArray":[10,12]}],["Path",{"applyMatrix":true,"segments":[[178.64745,161.83221],[421.35255,338.16779]],"fillColor":[0.50196,0,0.50196],"strokeColor":[0.69412,0.68627,0.70196],"strokeWidth":4,"dashArray":[10,12]}],["Path",{"applyMatrix":true,"segments":[[253.64745,107.34152],[346.35255,392.65848]],"fillColor":[0.50196,0,0.50196],"strokeColor":[0.69412,0.68627,0.70196],"strokeWidth":4,"dashArray":[10,12]}],["Path",{"applyMatrix":true,"segments":[[346.35255,107.34152],[253.64745,392.65848]],"fillColor":[0.50196,0,0.50196],"strokeColor":[0.69412,0.68627,0.70196],"strokeWidth":4,"dashArray":[10,12]}],["Path",{"applyMatrix":true,"segments":[[421.35255,161.83221],[178.64745,338.16779]],"fillColor":[0.50196,0,0.50196],"strokeColor":[0.69412,0.68627,0.70196],"strokeWidth":4,"dashArray":[10,12]}],["SymbolItem",{"applyMatrix":false,"matrix":[1,0,0,1,300,250],"symbol":["#17"],"fillColor":[0.50196,0,0.50196],"strokeColor":[0,0,0],"strokeWidth":4}]]}]]]' ;
-globals.saveState = mySave;
-</script>
-</head>
-<body>
-<div>
-	<canvas id="myCanvas" width="600" height="500" style="border:1px solid">
-		This text is displayed if your browser does not support HTML5.
-	</canvas>
-</div>
-<div>
-  <button id="undoBtn"> Undo </button>
-</div>
-<div>
-	<input type="color" id="strokeColorInput" value="#000000">
-	<label>Stroke color</label>
-</div>
-<div>
-	<input type="color" id="fillColorInput" value="#651dad">
-	<label>Fill color</label>
-</div>
-<div>
-	<input type="range" id="strokeWidthInput" min=1 max=10 value=2>
-	<label>Stroke width</label>
-</div>
-<div>
-	  <p id="textDisplay"></p>
-</div>
-</body>
+      function onMouseDrag(event) {
+      	console.log(dragItem);
+      	if (!dragItem) {
+      		return;
+      	}
+      	if (dragItem.point) {
+      		dragItem.point += event.delta;
+      	} else if (dragItem.position) {
+      		dragItem.position += event.delta;
+      	}
+      }
+
+      function undo() {
+      	window.alert("No undo function implemented");
+      	return;
+      }
+
+      function updateWindowDisplay() {
+      	return;
+      }
+
+      function setGlobals() {
+        globals.updateDisplay = updateWindowDisplay;
+      	globals.undo = undo;
+      	globals.setFillColor = function(color) {
+      		project.currentStyle.fillColor = color;
+      	};
+      	globals.setStrokeColor = function(color) {
+      		project.currentStyle.strokeColor = color;
+      	};
+      	globals.setStrokeWidth = function(strokeWidth) {
+      		project.currentStyle.strokeWidth = strokeWidth;
+      	};
+      }
+    </script>
+    <script type="text/javascript">
+      window.globals = {
+        setText: function (displayString) {
+          document.getElementById("textDisplay").innerHTML = displayString;
+        },
+      };
+      window.onload = function () {
+        window.globals.updateDisplay();
+        document.getElementById("undoBtn").onclick = function () {
+          window.globals.undo();
+        };
+        document.getElementById("fillColorInput").onchange = function () {
+          window.globals.setFillColor(
+            document.getElementById("fillColorInput").value
+          );
+        };
+        document.getElementById("strokeWidthInput").onchange = function () {
+          window.globals.setStrokeWidth(
+            document.getElementById("strokeWidthInput").value
+          );
+        };
+      };
+      var mySave =
+        '[["dictionary",{"#17":["SymbolDefinition",["Group",{"applyMatrix":true,"children":[["Path",{"applyMatrix":true,"opacity":0,"segments":[[[-100,0],[0,55.22847],[0,-55.22847]],[[0,-100],[-55.22847,0],[55.22847,0]],[[100,0],[0,-55.22847],[0,55.22847]],[[0,100],[55.22847,0],[-55.22847,0]]],"closed":true,"fillColor":[0.50196,0,0.50196],"strokeColor":[0,0,0],"strokeWidth":4}],["Path",{"applyMatrix":true,"segments":[[30.9017,-95.10565],[-80.9017,-58.77853],[-80.9017,58.77853],[30.9017,95.10565],[100,0]],"closed":true,"fillColor":[0.50196,0,0.50196],"strokeColor":[0,0,0],"strokeWidth":4}],["PointText",{"applyMatrix":false,"matrix":[1,0,0,1,19.72136,-71.08452],"content":"1","fillColor":[0.50196,0,0.50196],"strokeColor":[1,1,1],"fontFamily":"Courier New","fontSize":"15px","leading":18}],["PointText",{"applyMatrix":false,"matrix":[1,0,0,1,-69.72136,-42.02282],"content":"2","fillColor":[0.50196,0,0.50196],"strokeColor":[1,1,1],"fontFamily":"Courier New","fontSize":"15px","leading":18}],["PointText",{"applyMatrix":false,"matrix":[1,0,0,1,-69.72136,52.02282],"content":"3","fillColor":[0.50196,0,0.50196],"strokeColor":[1,1,1],"fontFamily":"Courier New","fontSize":"15px","leading":18}],["PointText",{"applyMatrix":false,"matrix":[1,0,0,1,19.72136,81.08452],"content":"4","fillColor":[0.50196,0,0.50196],"strokeColor":[1,1,1],"fontFamily":"Courier New","fontSize":"15px","leading":18}],["PointText",{"applyMatrix":false,"matrix":[1,0,0,1,75,5],"content":"5","fillColor":[0.50196,0,0.50196],"strokeColor":[1,1,1],"fontFamily":"Courier New","fontSize":"15px","leading":18}]]}]]}],[["Layer",{"applyMatrix":true,"children":[["Path",{"applyMatrix":true,"segments":[[330.9017,154.89435],[219.0983,191.22147],[219.0983,308.77853],[330.9017,345.10565],[400,250]],"closed":true,"strokeColor":[0,0,0],"strokeWidth":4}],["Path",{"applyMatrix":true,"segments":[[150,250],[450,250]],"fillColor":[0.50196,0,0.50196],"strokeColor":[0.69412,0.68627,0.70196],"strokeWidth":4,"dashArray":[10,12]}],["Path",{"applyMatrix":true,"segments":[[178.64745,161.83221],[421.35255,338.16779]],"fillColor":[0.50196,0,0.50196],"strokeColor":[0.69412,0.68627,0.70196],"strokeWidth":4,"dashArray":[10,12]}],["Path",{"applyMatrix":true,"segments":[[253.64745,107.34152],[346.35255,392.65848]],"fillColor":[0.50196,0,0.50196],"strokeColor":[0.69412,0.68627,0.70196],"strokeWidth":4,"dashArray":[10,12]}],["Path",{"applyMatrix":true,"segments":[[346.35255,107.34152],[253.64745,392.65848]],"fillColor":[0.50196,0,0.50196],"strokeColor":[0.69412,0.68627,0.70196],"strokeWidth":4,"dashArray":[10,12]}],["Path",{"applyMatrix":true,"segments":[[421.35255,161.83221],[178.64745,338.16779]],"fillColor":[0.50196,0,0.50196],"strokeColor":[0.69412,0.68627,0.70196],"strokeWidth":4,"dashArray":[10,12]}],["SymbolItem",{"applyMatrix":false,"matrix":[1,0,0,1,300,250],"symbol":["#17"],"fillColor":[0.50196,0,0.50196],"strokeColor":[0,0,0],"strokeWidth":4}]]}]]]';
+      globals.saveState = mySave;
+    </script>
+  </head>
+  <body>
+    <div>
+      <canvas id="myCanvas" width="600" height="500" style="border: 1px solid">
+        This text is displayed if your browser does not support HTML5.
+      </canvas>
+    </div>
+    <div>
+      <button id="undoBtn">Undo</button>
+    </div>
+    <div>
+      <input type="color" id="strokeColorInput" value="#000000" />
+      <label>Stroke color</label>
+    </div>
+    <div>
+      <input type="color" id="fillColorInput" value="#651dad" />
+      <label>Fill color</label>
+    </div>
+    <div>
+      <input type="range" id="strokeWidthInput" min="1" max="10" value="2" />
+      <label>Stroke width</label>
+    </div>
+    <div>
+      <p id="textDisplay"></p>
+    </div>
+  </body>
 </html>

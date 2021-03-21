@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Template</title>
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script
+      id="MathJax-script"
+      async
+      src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
+    ></script>
+    <link rel="stylesheet" href="fullscreen.css" />
+    <link rel="stylesheet" href="mathquill-0.10.1/mathquill.css" />
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.0/jquery.min.js"></script>
+    <script src="mathquill-0.10.1/mathquill.js"></script>
+    <script type="text/javascript" src="js/paper.js"></script>
+    <script type="text/paperscript" canvas="myCanvas">
+
+
+      var hitOptions = {
+      	fill: true,
+      	stroke: true,
+      	segments: true,
+      	tolerance: 5
+      }
+
+      var onScreenControls;
+      var newPath, dragItem;
+
+      setGlobals();
+      loadCanvas();
+
+      view.element.style.cursor = "pointer"; // Hooray!!
+
+      //globals.setText("x+1");
+
+      function loadCanvas() {
+      	// Set background.
+      	project.activeLayer.name = "Background";
+      	project.currentStyle = {fillColor: "white", strokeColor: "white", dashArray: null};
+      	var whiteBackground = new Path.Rectangle(view.bounds);
+      	whiteBackground.locked = true;
+
+      }
+
+      function setCursor() {
+      	window.setCursor("wait");
+      }
+
+      function onMouseDown(event) {
+
+      }
+
+      function onMouseDrag(event) {
+
+      }
+
+      function onMouseUp(event) {
+
+      }
+
+      function updateWindowDisplay() {
+      	return;
+      }
+
+      function undo() {
+      	console.log("Undo not implemented");
+      	return;
+      }
+
+      function setGlobals() {
+        globals.updateDisplay = updateWindowDisplay;
+      	globals.undo = undo;
+      	globals.refreshCanvas = function() {
+      		project.clear();
+      		loadCanvas();
+      	}
+      	globals.setFillColor = function(color) {
+      		project.currentStyle.fillColor = color;
+      	};
+      	globals.setStrokeColor = function(color) {
+      		project.currentStyle.strokeColor = color;
+      	};
+      	globals.setStrokeWidth = function(strokeWidth) {
+      		project.currentStyle.strokeWidth = strokeWidth;
+      	};
+      	globals.setNum  =  function(n) {
+      		//values.num =  n;
+      		return;
+      	};
+      	globals.resizePaper = function() {
+          var background = project.layers["Background"].children[0];
+          background.scale(view.bounds.width/background.bounds.width, view.bounds.height/background.bounds.height, new Point(0,0));
+        }
+      }
+    </script>
+    <script type="text/javascript">
+      window.globals = {
+        setText: function (displayString) {
+          document.getElementById("answer2").innerHTML = displayString;
+        },
+      };
+      function checkAnswer(entry) {
+        if (entry) {
+          console.log("Check entry: " + entry);
+        } else {
+          console.log("No entry?");
+        }
+      }
+      window.onload = function () {
+        // Add this kind of event listener to every checkbox. This is where a react component might be handy!
+        document.getElementById("myCheckbox").onchange = function () {
+          console.log("Checkbox toggled");
+        };
+        var MQ = MathQuill.getInterface(2);
+        var problemSpan = document.getElementById("problem");
+        MQ.StaticMath(problemSpan);
+        console.log(problemSpan.content);
+        var answerSpan = document.getElementById("answer");
+        var answerSpan2 = document.getElementById("answer2");
+
+        var answerMathField = MQ.MathField(answerSpan, {
+          handlers: {
+            edit: function () {
+              var enteredMath = answerMathField.latex(); // Get entered math in LaTeX format
+              checkAnswer(enteredMath);
+            },
+          },
+        });
+        var answerMathField2 = MQ.MathField(answerSpan2, {
+          handlers: {
+            edit: function () {
+              var enteredMath2 = answerMathField2.latex(); // Get entered math in LaTeX format
+              checkAnswer(enteredMath2);
+              console.log("Edited");
+            },
+          },
+        });
+      };
+    </script>
+  </head>
+  <body>
+    <div class="topnav">
+      <a href="about.html">About</a>
+      <a href="braids.html">Braids</a>
+      <a href="commutative-diagram.html">Snake Lemma</a>
+      <a href="dihedral.html">Dihedral group</a>
+      <a href="graphs.html">Graph theory</a>
+      <a href="siegelPlane.html">Siegel Plane</a>
+      <a href="topology.html">Topology</a>
+    </div>
+    <div>
+      <div class="row">
+        <div class="floaties">
+          <p class="calcEntry">
+            <input
+              type="checkbox"
+              id="myCheckbox1"
+              name="myName"
+              value="myValue"
+              checked="true"
+            />
+            Solve <span id="problem">\sin(x) = 0</span>.
+          </p>
+          <p class="calcEntry">
+            <input
+              type="checkbox"
+              id="myCheckbox2"
+              name="myName"
+              value="myValue"
+              checked="true"
+            />
+            \(y=\)<span id="answer">x</span>
+          </p>
+          <p class="calcEntry">
+            <input
+              type="checkbox"
+              id="myCheckbox3"
+              name="myName"
+              value="myValue"
+              checked="true"
+            />
+            Graph 1: \( V=\{\)<span id="answer2">v_1, v_2, v_3</span>\(\}\)
+          </p>
+          <p class="calcEntry">
+            <input
+              type="checkbox"
+              id="myCheckbox"
+              name="myName"
+              value="myValue"
+              checked="true"
+            />
+            When \(a \ne 0\), there are two solutions to \(ax^2 + bx + c = 0\)
+            and they are \[x = {-b \pm \sqrt{b^2-4ac} \over 2a}.\]
+          </p>
+          <p class="calcEntry">
+            <input
+              type="checkbox"
+              id="myCheckbox5"
+              name="myName"
+              value="myValue"
+              checked="true"
+            />
+            Can I type \(A \cap B = C\)? Or \(x=2\)?
+          </p>
+          <p class="calcEntry">
+            <input
+              type="checkbox"
+              id="myCheckbox6"
+              name="myName"
+              value="myValue"
+              checked="true"
+            />
+            \( \text{area}(S) = 5\)
+          </p>
+          <p class="submitAnswer">Submit your answer here.</p>
+        </div>
+        <canvas id="myCanvas" resize="true" style="border: 1px solid #000">
+          This text is displayed if your browser does not support HTML5.
+        </canvas>
+      </div>
+    </div>
+  </body>
+</html>

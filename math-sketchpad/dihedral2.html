@@ -228,6 +228,8 @@ function matrixReflect(theta, lambda) {
   var c = Math.cos(theta);
   var s = Math.sin(theta);
   var scaleMatrix = new Matrix(c*c+lambda*s*s, (1-lambda)*c*s, (1-lambda)*c*s, s*s + lambda*c*c,0,0);
+  console.log(scaleMatrix);
+  console.log(scaleMatrix.decompose());
   return scaleMatrix;
 }
 
