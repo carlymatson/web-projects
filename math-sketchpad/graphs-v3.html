@@ -75,51 +75,47 @@
         }),
       };
       var helpers = {
-        setGlobals: function() {
-          globals.getStyleById = function(id) {
-            var myItem = project.getItem({id: id});
-            if (!myItem) {
-              console.log("No item.");
-              return null;
-            }
-            return myItem.style;
-          }
-          globals.refreshCanvas = function() {
-            project.clear();
-            loadCanvas();
-          };
-          globals.setProps = function(id, props) {
-            var item = project.getItem({id: id});
-            item.set(props);
-          };
-          globals.colorHSL = protos.colorHSLa;
-        },
         createBackground: function() {
-          // Make sure this goes into the correct layer.
-          var backLayer = project.layers[0];
-          console.log("Back layer: ", backLayer);
-          backLayer.name = "backgroundLayer";
+          var backLayer = project.layers["backgroundLayer"];
+          var backGroup, whiteBackground, grid;
+          var celSize = new Size(36,36);
+          var gridSize = view.bounds.size / celSize;
+          if (!backLayer) {
+            backLayer = new Layer({name: "backgroundLayer"});
+          } else {
+            backLayer.removeChildren();
+          }
           backLayer.activate();
-          var whiteBackground = new Path.Rectangle({
+          whiteBackground = new Path.Rectangle({
             rectangle: view.bounds,
             fillColor: "white",
             strokeColor: "white",
             locked: true,
           });
-          var gridSize = view.bounds.size / new Size(72,72);
           project.currentStyle = {
             strokeColor: "lightblue",
           };
+          grid = new CompoundPath();
           for (var i=0; i<gridSize.width; i++) {
-            var x = i*72;
-            var gLine = new Path.Line(new Point(x, view.bounds.top), new Point(x, view.bounds.bottom));
+            var x = i*celSize.width;
+            var gLine = new Path({
+              segments: [new Point(x, view.bounds.top), new Point(x, view.bounds.bottom)],
+              strokeScaling: false,
+            });
+            grid.addChild(gLine);
           }
           for (var i=0; i<gridSize.height; i++) {
-            var y = i*72;
+            var y = i*celSize.height;
             var gLine = new Path.Line(new Point(view.bounds.left, y), new Point(view.bounds.right, y));
+            grid.addChild(gLine);
           }
-          contentLayer = new Layer();
-          contentLayer.activate();
+          backGroup = new Group(whiteBackground, grid);
+          backSymbolDef = new SymbolDefinition(backGroup);
+          var backSym = backSymbolDef.place(view.bounds.center);
+          backSym.tweenTo({
+            scaling: 2,
+          }, 800);
+          backLayer.sendToBack();
         },
         clearVariables: function() {
           return null;
@@ -336,8 +332,12 @@
           }
           if (activeItem.className === "Segment") {
             activeItem.point += event.delta;
-            helpers.updateDependency(activeItem.path);
+            helpers.updateAllDependents(activeItem.path);
             activeItem.smooth();
+          } else if (activeItem.className === "Point") {
+            activeItem.x += event.delta.x;
+            activeItem.y += event.delta.y;
+            helpers.updateAllDependents(activeItem._owner.path);
           } else {
             activeItem.position += event.delta;
           }
@@ -352,17 +352,23 @@
           }
           activeItem.add(event.point);
         },
-        dragToScale: function(event) { // Not implemented. Decisions to make.
-          return;
-        },
         dragToResize: function(event) {
           if (!hitResult) {
             return;
           }
-          // If name ends in -center, only scale in one direction (about the opposite edge).
-          // Otherwise, scale about the opposite corner.
           var oppCorner = basics.oppositeCorners[hitResult.name];
-          return null;
+          var point = hitResult.item.bounds[oppCorner];
+          var newSize = event.point - point;
+          var oldSize = event.point - event.delta - point;
+          var scaleBy = new Size(newSize/oldSize);
+          if (/enter$/.test(oppCorner)) {
+            if (/^left/.test(oppCorner) || /^right/.test(oppCorner)) {
+              scaleBy.height = 1;
+            } else {
+              scaleBy.width = 1;
+            }
+          }
+          hitResult.item.scale(scaleBy, point);
         },
         dragToRotate: function(event) {
           if (activeItem.applyMatrix) {
@@ -372,8 +378,14 @@
           var currentAngle = (event.point-activeItem.position).angle;
           activeItem.rotate(currentAngle - startAngle);
         },
-        upToClear: function(event) { // Not implemented.
+        upToClear: function(event) {
+          activeItem = hitResult = null;
           return;
+        },
+        moveToSelect: function(event) {
+          project.deselectAll();
+          hitResult = contentLayer.hitTest(event.point, basics.hitOptions);
+          if (hitResult) hitResult.item.selected = true;
         },
       };
       var basics = {
@@ -387,14 +399,14 @@
           tolerance: 5,
         },
         oppositeCorners: {
-          "top-center": "bottom-center",
-          "bottom-center": "top-center",
-          "right-center": "left-center",
-          "left-center": "right-center",
-          "top-left": "bottom-right",
-          "top-right": "bottom-left",
-          "bottom-right": "top-left",
-          "bottom-left": "top-right",
+          "top-center": "bottomCenter",
+          "bottom-center": "topCenter",
+          "right-center": "leftCenter",
+          "left-center": "rightCenter",
+          "top-left": "bottomRight",
+          "top-right": "bottomLeft",
+          "bottom-right": "topLeft",
+          "bottom-left": "topRight",
         },
       };
       var styles = {
@@ -414,8 +426,9 @@
         sketch: {
           fillColor: null,
           strokeColor: "black",
-          strokeWidth: 2,
+          strokeWidth: 3,
           dashArray: null,
+          strokeCap: "round",
         },
       };
       var diagrams = {
@@ -434,41 +447,174 @@
                          [null, "0", "0", "0", null]
                        ],
       };
-      helpers.setGlobals();
+      var modeSetters = {
+        default: function() {
+          tool.onMouseMove = function(event) {
+            defaultMode(event, false);
+          };
+          tool.onMouseDown = function(event) {
+            defaultMode(event, true);
+          };
+          tool.onMouseUp = handlers.upToClear;
+        },
+        draw: function() {
+          contentLayer.activate();
+          view.element.style.cursor = "crosshair";
+          project.currentStyle = styles.sketch;
+          globals.styleControls(0, project.currentStyle);
+          tool.onMouseDown = function(event) {
+            activeItem = new Path([event.point]);
+            activeItem.data.bendable = true;
+            tool.onMouseUp = function(event) {
+              if (!activeItem) return;
+              if ((event.point - activeItem.firstSegment.point).length < 10) {
+                activeItem.closePath();
+              }
+              activeItem.simplify(5);
+            };
+          };
+          tool.onMouseMove = null;
+          tool.onMouseDrag = handlers.dragToDraw;
+        },
+        erase: function() {
+          view.element.style.cursor = "default";
+          tool.onMouseDown = function(event) {
+            hitResult = contentLayer.hitTest(event.point, basics.hitOptions);
+            if (!hitResult) return;
+            if (hitResult.item &&
+                hitResult.type === "segment" &&
+                hitResult.item.data.bendable)  {
+              var index = hitResult.segment.index;
+              hitResult.item.removeSegment(index);
+            } else {
+              hitResult.item.remove();
+            }
+          };
+          tool.onMouseMove = handlers.moveToSelect;
+          tool.onMouseDrag = null;
+        }
+      };
+      function defaultMode(event, isDown) {
+        project.deselectAll();
+        hitResult = project.hitTest(event.point, basics.hitOptions);
+        if (hitResult) {
+          if (isDown) console.log(hitResult.type);
+           if (hitResult.type === "bounds" && hitResult.item.data.resizeable) {
+            if (hitResult.name === "top-center" || hitResult.name === "bottom-center") {
+              view.element.style.cursor = "ns-resize";
+            } else if (hitResult.name === "right-center" || hitResult.name === "left-center") {
+              view.element.style.cursor = "ew-resize";
+            } else if (hitResult.name === "bottom-right" || hitResult.name === "top-left") {
+              view.element.style.cursor = "nwse-resize";
+            } else if (hitResult.name === "top-right" || hitResult.name === "bottom-left") {
+              view.element.style.cursor = "nesw-resize";
+            }
+            if (isDown) {
+              activeItem = hitResult.item; // Currently not being used.
+              tool.onMouseDrag = function(event) {
+                handlers.dragToResize(event);
+              };
+              //tool.onMouseUp = handlers.clearVariables;
+            }
+          } else if (hitResult.item && (hitResult.item.data.shiftable || hitResult.item.data.bendable)) {
+            if (hitResult.item.data.bendable) {
+              hitResult.item.selected = true;
+              if (event.modifiers.alt) {
+                hitResult.item.fullySelected = true;
+              }
+            }
+
+            if (isDown) {
+              view.element.style.cursor = "grabbing";
+              if (hitResult.type === "handle-in" || hitResult.type === "handle-out") {
+                //if (!event.modifiers.alt) return;
+                if (hitResult.type === "handle-in") {
+                  activeItem = hitResult.segment["_handleIn"];
+                } else {
+                  activeItem = hitResult.segment["_handleOut"];
+                }
+              } else if (hitResult.type === "stroke" && hitResult.item.data.bendable) {
+                var location = hitResult.location;
+          			activeItem = hitResult.item.insert(location.index + 1, event.point);
+                activeItem.smooth();
+              } else if (hitResult.type === "segment" && hitResult.item.data.bendable) {
+                activeItem = hitResult.segment;
+              } else {
+                activeItem = hitResult.item;
+              }
+              tool.onMouseDrag = handlers.dragToMove;
+              //tool.onMouseUp = handlers.clearVariables;
+            } else {
+              view.element.style.cursor = "grab";
+            }
+          }
+        } else {
+          view.element.style.cursor = "default";
+        }
+      }
       function loadCanvas() {
-        backLayer = new Layer({name: "background"});
-        helpers.createBackground();
         contentLayer = new Layer({name: "content"});
-        helpers.saveState(contentLayer);
-        contentLayer.activate();
         var myRect = protos.rect.clone().set({
-          fillColor: "orange",
+          fillColor: "yellow",
           position: new Point(200,200),
           scaling: new Size(80,100)
         });
-        contentLayer.addChild(myRect);
         var myDot = protos.disc.clone().set({
           fillColor: "green",
           strokeWidth: 3,
           position: new Point(200,100),
           scaling: new Size(10,10),
         });
-        contentLayer.addChild(myDot);
+        var graph, node1, node2;
+        contentLayer.addChildren([myRect, myDot]);
+
         helpers.saveState(contentLayer);
         helpers.toDisplayString(contentLayer);
-        globals.openSettings(myDot.id, [
-          {propName: "strokeColor", currentVal: myDot.strokeColor.toCSS(true), inputType: "color"},
-          {propName: "fillColor", currentVal: myDot.fillColor.toCSS(true), inputType: "color"},
-          {propName: "strokeWidth", currentVal: myDot.strokeWidth, inputType: "range", min: 1, max: 10},
-        ]);
 
-        var myGraph = newGraph({edgeValues: {isDirected: true,},});
-        var node1 = myGraph.addNode(new Point(400,200), "N1");
-        var node2 = myGraph.addNode(new Point(480, 200), "N2");
+        myGraph = newGraph({edgeValues: {isDirected: true,},});
+        node1 = myGraph.addNode(new Point(400,200), "N1");
+        node2 = myGraph.addNode(new Point(480, 200), "N2");
         myGraph.addEdge(node1, node2);
       }
-
+      Object.assign(globals, {
+        setMode: function(mode) {
+          modeSetters[mode]();
+        },
+        getStyleById: function(id) {
+          if (id === 0) {
+            return project.currentStyle;
+          }
+          var myItem = project.getItem({id: id});
+          if (!myItem) {
+            return null;
+          }
+          return myItem.style;
+        },
+        refreshCanvas: function() {
+          project.clear();
+          loadCanvas();
+        },
+        setProps: function(id, props) {
+          var item = project.getItem({id: id});
+          item.set(props);
+        },
+        colorHSL: protos.colorHSLa,
+        zoomCanvas: function() {
+          console.log("Zoom canvas - not implmented");
+          for (var i=0; i < project.layers.length; i++) {
+            var myTween = project.layers[i].tweenTo({
+              scaling: 1.1,
+            }, 2000);
+            console.log(myTween);
+          }
+        },
+      });
       loadCanvas();
+      globals.setMode("default");
+
+      function onResize(event) {
+        helpers.createBackground();
+      }
 
       function newGraph(args) {
         // Args: nodeValues, edgeValues, labelValues
@@ -594,74 +740,6 @@
         });
       	return g;
       }
-
-      function defaultMode(event, isDown) {
-        hitResult = project.hitTest(event.point, basics.hitOptions);
-        if (hitResult) {
-          if (hitResult.type === "bounds" && hitResult.item.data.resizeable) {
-            if (hitResult.name === "top-center" || hitResult.name === "bottom-center") {
-              view.element.style.cursor = "ns-resize";
-            } else if (hitResult.name === "right-center" || hitResult.name === "left-center") {
-              view.element.style.cursor = "ew-resize";
-            } else if (hitResult.name === "bottom-right" || hitResult.name === "top-left") {
-              view.element.style.cursor = "nwse-resize";
-            } else if (hitResult.name === "top-right" || hitResult.name === "bottom-left") {
-              view.element.style.cursor = "nesw-resize";
-            }
-            if (isDown) {
-              // Determine what point to scale about, and whether or not it should be radial.
-              var oppCorner = basics.oppositeCorners[hitResult.name];
-              activeItem = hitResult.item;
-              tool.onMouseDrag = function(event) {
-                handlers.dragToResize(event, activeItem.bounds.oppCorner);
-              };
-              //tool.onMouseUp = handlers.clearVariables;
-            }
-          } else if (hitResult.item && (hitResult.item.data.shiftable || hitResult.item.data.bendable)) {
-            if (isDown) {
-              view.element.style.cursor = "grabbing";
-              if (hitResult.type === "stroke" && hitResult.item.data.bendable) {
-                var location = hitResult.location;
-          			activeItem = hitResult.item.insert(location.index + 1, event.point);
-                activeItem.smooth();
-              } else if (hitResult.type === "segment" && hitResult.item.data.bendable) {
-                activeItem = hitResult.segment;
-              } else {
-                activeItem = hitResult.item;
-              }
-              tool.onMouseDrag = handlers.dragToMove;
-              //tool.onMouseUp = handlers.clearVariables;
-            } else {
-              view.element.style.cursor = "grab";
-            }
-          }
-        } else {
-          view.element.style.cursor = "default";
-        }
-      }
-
-      tool.onMouseMove = function(event) {
-        defaultMode(event, false);
-      }
-      tool.onMouseDown = function(event) {
-        defaultMode(event, true);
-      };
-
-      function onMouseUp(event) {
-
-        if (tool.onMouseDrag == handlers.dragToDraw) {
-          activeItem.simplify();
-        }
-        if (event.modifiers.shift) {
-          return;
-        }
-        if (activeItem) {
-          activeItem = null;
-          defaultMode(event, false);
-        }
-        tool.onMouseDrag = null;
-        return null;
-      }
     </script>
     <script type="text/javascript" src="calculator-display.js"></script>
   </head>
@@ -675,44 +753,19 @@
       <a href="siegelPlane.html">Siegel Plane</a>
       <a href="topology.html">Topology</a>
     </div>
-    <div>
-      <div class="row">
-        <canvas id="myCanvas" resize="true" style="border: 1px solid #000">
+    <div class="row" id="mainRow">
+      <div id="canvasContainer">
+        <canvas id="myCanvas" resize="true">
           This text is displayed if your browser does not support HTML5.
         </canvas>
-        <div class="button-bar">
-          <button class="mode-button">
-            <i class="fas fa-mouse-pointer"></i>
+      </div>
+      <div class="calc-display" id="calcDisplay">
+        <div class="calc-header">
+          <button id="hideCalc">
+            <i class="fas fa-angle-double-right"></i>
           </button>
-          <button class="mode-button"><i class="fas fa-marker"></i></button>
-          <button class="mode-button"><i class="fas fa-eraser"></i></button>
-          <button class="mode-button">
-            <i class="fas fa-hand-sparkles"></i>
-          </button>
-          <button class="mode-button"><i class="far fa-clone"></i></button>
-          <button class="mode-button">
-            <i class="fas fa-eye-dropper"></i>
-          </button>
-          <button class="mode-button"><i class="fas fa-ruler"></i></button>
-          <button class="mode-button">
-            <i class="fas fa-draw-polygon"></i>
-          </button>
-          <button class="mode-button">
-            <i class="far fa-square"></i>
-          </button>
-          <button class="mode-button">
-            <i class="far fa-circle"></i>
-          </button>
-          <button class="mode-button"><i class="fas fa-share-alt"></i></button>
-        </div>
-        <div id="calcDisplay">
-          <div id="calcHeader">
-            <p>
-              <button><i class="fa fa-angle-double-right"></i></button>
-              Expression List <button><i class="fa fa-undo"></i></button>
-              <button><i class="fa fa-caret-right"></i></button>
-            </p>
-          </div>
+          <p>Expression List</p>
+          <button id="plusButton"><i class="fas fa-plus"></i></button>
         </div>
       </div>
     </div>
