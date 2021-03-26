@@ -172,5 +172,6 @@ label {
 .setting-control {
   display: flex;
   justify-content: flex-end;
+  flex-wrap: wrap;
   padding: 5px;
 }

@@ -18,236 +18,100 @@
     <script src="mathquill-0.10.1/mathquill.js"></script>
     <script type="text/javascript" src="js/paper.js"></script>
     <script type="text/paperscript" canvas="myCanvas">
-      var verbose = true;
       var hitResult, activeItem, selectedItems = [];
       var backLayer, contentLayer;
-      var protos = {
-        point: new Path.Circle({
-          center: new Point(0,0),
-          radius: 3,
-          fillColor: "black",
-          strokeColor: "black",
-          strokeWidth: 1,
-          dashArray: null,
-          data: {type: "Pointy",},
-        }),
-        disc: new Path.Circle({
-          center: new Point(0,0),
-          radius: 1,
-          fillColor: "black",
-          strokeColor: "black",
-          strokeWidth: 1,
-          dashArray: null,
-          strokeScaling: false,
-          data: {type: "Disc", shiftable: true,},
-        }),
-        rect: new Path.Rectangle({
-          point: new Point(0,0),
-          size: new Size(1,1),
-          fillColor: "black",
-          strokeColor: "black",
-          strokeWidth: 1,
-          dashArray: null,
-          strokeScaling: false,
-          data: {type: "Rectangle", resizeable: true, shiftable: true,},
-        }),
-        arrow: new Path({
-          segments: [new Point(-10,4), new Point(0,0), new Point(-10,-4)],
-          pivot: new Point(0,0),
-          strokeColor: "black",
-          strokeWidth: 1,
-          applyMatrix: false,
-          locked: true,
-        }),
-        tick: new Path({
-          segments: [new Point(0,-4), new Point(0,4)],
-          strokeColor: "red",
-          strokeWidth: 1,
-          applyMatrix: false,
-          locked: true,
-        }),
-        dash: [10,12],
+      var basics = {
+        origin: new Point(0,0),
+        hitOptions: {
+          fill: true,
+          stroke: true,
+          segments: true,
+          bounds: true,
+          //center: true,
+          handles: true,
+          tolerance: 5,
+        },
+        oppositeCorners: {
+          "top-center": "bottomCenter",
+          "bottom-center": "topCenter",
+          "right-center": "leftCenter",
+          "left-center": "rightCenter",
+          "top-left": "bottomRight",
+          "top-right": "bottomLeft",
+          "bottom-right": "topLeft",
+          "bottom-left": "topRight",
+        },
+        dashArray: [10,12],
         colorHSLa: new Color({
           hue: 140,
           saturation: 1,
           lightness: 0.4,
           alpha: 0.7
         }),
+        opposite: {
+          topCenter: "bottomCenter",
+          bottomCenter: "topCenter",
+          leftCenter: "rightCenter",
+          rightCenter: "leftCenter",
+          topRight: "bottomLeft",
+          bottomLeft: "topRight",
+          topLeft: "bottomRight",
+          bottomRight: "topLeft",
+        },
+        resizeCursor: {
+          topCenter: "ns-resize",
+          bottomCenter: "ns-resize",
+          leftCenter: "ew-resize",
+          rightCenter: "ew-resize",
+          topRight: "nesw-resize",
+          bottomLeft: "nesw-resize",
+          topLeft: "nwse-resize",
+          bottomRight: "nwse-resize",
+        },
       };
-      var helpers = {
-        createBackground: function() {
-          var backLayer = project.layers["backgroundLayer"];
-          var backGroup, whiteBackground, grid;
-          var celSize = new Size(36,36);
-          var gridSize = view.bounds.size / celSize;
-          if (!backLayer) {
-            backLayer = new Layer({name: "backgroundLayer"});
-          } else {
-            backLayer.removeChildren();
-          }
-          backLayer.activate();
-          whiteBackground = new Path.Rectangle({
-            rectangle: view.bounds,
-            fillColor: "white",
-            strokeColor: "white",
-            locked: true,
-          });
-          project.currentStyle = {
-            strokeColor: "lightblue",
-          };
-          grid = new CompoundPath();
-          for (var i=0; i<gridSize.width; i++) {
-            var x = i*celSize.width;
-            var gLine = new Path({
-              segments: [new Point(x, view.bounds.top), new Point(x, view.bounds.bottom)],
-              strokeScaling: false,
-            });
-            grid.addChild(gLine);
-          }
-          for (var i=0; i<gridSize.height; i++) {
-            var y = i*celSize.height;
-            var gLine = new Path.Line(new Point(view.bounds.left, y), new Point(view.bounds.right, y));
-            grid.addChild(gLine);
-          }
-          backGroup = new Group(whiteBackground, grid);
-          backSymbolDef = new SymbolDefinition(backGroup);
-          var backSym = backSymbolDef.place(view.bounds.center);
-          backSym.tweenTo({
-            scaling: 2,
-          }, 800);
-          backLayer.sendToBack();
+      var styles = {
+        text: {
+          fillColor: "black",
+          strokeColor: "null",
+          strokeWidth: 1,
+          dashArray: null,
+          fontFamily: "Arial",
+          strokeJoin: "round",
         },
-        clearVariables: function() {
-          return null;
-        }, // Not implemented.
-        getCharacter: function(index, alphabet) {
-          var char;
-          if (alphabet === "Greek") {
-            char = String.fromCharCode(913+index);
-          } else if (alphabet === "greek") {
-            char = String.fromCharCode(945+index);
-          } else if (alphabet === "Latin") {
-            char = String.fromCharCode(65+index);
-          } else if (alphabet === "latin") {
-            char = String.fromCharCode(97+index);
-          }
-          return char;
+        stroke: {
+          fillColor: null,
+          strokeColor: "black",
+          strokeWidth: 1,
         },
-        boundaryPoint: function(item, pt2, args) {
-          if (item.className === "Point") {
-            return item;
-          }
-          if (item.bounds.contains(pt2)) {
-            return pt2;
-          }
-          var boundPath = new Path.Rectangle(item.bounds);
-          boundPath.scale((item.bounds.size + new Size(10,10))/item.bounds.size);
-          if (args && args.padding) {
-            boundPath.scale((item.bounds.size+args.padding*2)/item.bounds.size);
-          }
-          var seg = new Path.Line(item.position, pt2);
-          var intersections = boundPath.getIntersections(seg);
-          boundPath.remove();
-          seg.remove();
-          return (intersections[0] ? intersections[0].point : item.position);
+        sketch: {
+          fillColor: null,
+          strokeColor: "black",
+          strokeWidth: 3,
+          dashArray: null,
+          strokeCap: "round",
         },
-        addDependency: function(owner, decor, args) {
-          var point;
-          if (args && (args.curveTime || args.curveTime == 0)) {
-            point = owner.getPointAt(args.curveTime*owner.length);
-            decor.data.curveTime = args.curveTime;
-          } else {
-            point = owner.point ? owner.point : owner.position;
-          }
-          if (decor.className === "PointText") {
-            decor.data.shift = args ? args.shift : new Point(0,0);
-            owner.data.label.content = decor.content;
-          }
-          if (!decor.applyMatrix) {
-            var vector = owner.getTangentAt(args.curveTime);
-            decor.rotate(vector.angle);
-          }
-          decor.position = point;
-          decor.data.owner = owner;
-          if (!owner.data.dependents) {
-            owner.data.dependents = [];
-          }
-          owner.data.dependents.push(decor);
-          return decor;
+      };
+      var linalg = {
+        // Also: matrix from vectors. Grid (linear vs dot).
+        dot: function(v,w) {
+          return v.x*w.x + v.y*w.y;
         },
-        updateDependency: function(decor, args) {
-          var point, vec;
-          if (decor.data.n1 || decor.data.n2) {
-            if (decor.data.n1) {
-              var seg = decor.firstSegment;
-              decor.firstSegment.point = helpers.boundaryPoint(decor.data.n1, seg.next.point);
-              //decor.smooth();
-            }
-            if (decor.data.n2) {
-              var seg = decor.lastSegment;
-              decor.lastSegment.point = helpers.boundaryPoint(decor.data.n2, seg.previous.point);
-              //decor.smooth();
-            }
-          } else if (decor.data.endpoints) {
-            decor.firstSegment.point = helpers.boundaryPoint(decor.data.endpoints[0], decor.firstSegment.next.point);
-            decor.lastSegment.point = helpers.boundaryPoint(decor.data.endpoints[1], decor.lastSegment.previous.point);
-            //decor.smooth();
-            return;
-          } else if (decor.data.owner) {
-            var owner = decor.data.owner;
-            var shift = decor.data.shift ? decor.data.shift : new Point(0,0);
-            if (decor.data.curveTime) {
-              point = owner.getPointAt(decor.data.curveTime*owner.length) + shift;
-              vec = owner.getTangentAt(decor.data.curveTime*owner.length);
-            } else {
-              point = (owner.point ? owner.point : owner.position) + shift;
-            }
-            if (decor.point) {
-              decor.point = point;
-            } else {
-              decor.position = point;
-            }
-            if (vec && !decor.applyMatrix) {
-              var rotationPrev = decor.rotation;
-              decor.rotate(vec.angle - rotationPrev);
-            }
-            if (args && args.updateColor) {
-              decor.strokeColor = decor.data.owner.strokeColor;
-              if (decor.fillColor) {
-                decor.fillColor = decor.strokeColor;
-              }
-            }
-          }
-          if (decor.data.dependents) {
-            helpers.updateAllDependents(decor);
-          }
+        cross: function(v,w) {
+          return v.x*w.y - v.y*w.x;
         },
-        updateAllDependents: function(item) {
-          if (!item.data.dependents) {
-            return;
-          }
-          for (var i=0; i < item.data.dependents.length; i++) {
-            helpers.updateDependency(item.data.dependents[i]);
-          }
+        orth: function(v) {
+          return new Point(-v.y, v.x);
         },
-        lineFromTo: function(item1, item2) {
-          var items = [item1, item2];
-          var lineSeg;
-          var point1 = helpers.boundaryPoint(items[0], items[1].position);
-          var point2 = helpers.boundaryPoint(items[1], items[0].position);
-          lineSeg = new Path([point1, point2]);
-          return lineSeg;
+        unit: function(v) {
+          if (v.length === 0) return v;
+          return v/v.length;
         },
-        mapsTo: function (item1, item2) { // FIXME: Implement decorate path.
-          var line = helpers.lineFromTo(item1, item2);
-          var arrowTip = protos.arrow.clone();
-          var crossBar = protos.tick.clone();
-          decoratePath(line, arrowTip, {curveTime: 1});
-          decoratePath(line, crossBar, {curveTime: 0});
-          return line;
+        comp: function(v,w) {
+          if (v.length*w.length === 0) return 0;
+          return linalg.dot(v,w)/(v.length*w.length);
         },
-        decorate: function(path, decor, args) {
-          return;
+        proj: function(v,w) {
+          return linalg.comp(v,w)*linalg.unit(v);
         },
         getReflectionMatrix: function(angle, scale) {
           angle *= Math.PI/180;
@@ -267,62 +131,224 @@
           item.transform(matrix);
           item.position += shift;
         },
-        saveState: function(item) {
-          if (item.writeState) {
-            item.writeState();
-            return;
+        gridBounds: function(v,w,rect) {
+          var corners = ["topLeft", "topRight", "bottomLeft", "bottomRight"];
+          var minPoint;
+          var maxPoint;
+          for (var i=0; i< 4; i++) {
+            var corner = corners[i];
+            var numVs = linalg.dot(linalg.orth(w), view.bounds[corner]) / linalg.dot(linalg.orth(w), v);
+            var numWs = linalg.dot(linalg.orth(v), view.bounds[corner]) / linalg.dot(linalg.orth(v), w);
+            minPoint = minPoint ? Point.min(minPoint, new Point(numVs, numWs)) : new Point(numVs, numWs);
+            maxPoint = maxPoint ? Point.max(maxPoint, new Point(numVs, numWs)) : new Point(numVs, numWs);
           }
-          if (!item.data.history) {
-            item.data.history = [];
-          }
-          var state;
-          if (item.children) {
-            state = {};
-            for (var i=0; i < item.children.length; i++) {
-              state[item.children[i].id] = helpers.saveState(item.children[i]);
-            }
-          } else {
-            state = item.exportJSON();
-          }
-          item.data.history.push(state);
-          return (item.data.history.length-1);
+          minPoint = minPoint.floor();
+          maxPoint = maxPoint.ceil();
+          return [minPoint, maxPoint];
         },
-        loadState: function(target, index) {
-          // If target has no history in its data, do nothing. Return.
-          if (!target.data.history) {
+        lineGrid: function(v,w,rect) {
+          var bounds = linalg.gridBounds(v,w,rect);
+          var grid = new CompoundPath({
+            style: styles.stroke,
+            strokeColor: "#888",
+            strokeScaling: false,
+          });
+          for (var i = bounds[0].x; i <= bounds[1].x; i++) {
+            grid.addChild(new Path.Line(v*i + w*bounds[0].y, v*i + w*bounds[1].y));
+          }
+          for (var i = bounds[0].y; i <= bounds[1].y; i++) {
+            grid.addChild(new Path.Line(v*bounds[0].x + w*i, v*bounds[1].x + w*i));
+          }
+          return grid;
+        },
+        pointGrid: function(v,w,rect) {
+          var grid = [];
+          for (var i = bounds[0].x; i <= bounds[1].x; i++) {
+            var row = [];
+            for (var j = bounds[0].y; j <= bounds[1].y; j++) {
+              row.push(i*v + j*w);
+            }
+            grid.push(row);
+          }
+          return grid;
+        },
+      };
+      var draw = {
+        point: function(point) {
+          return new Shape.Circle({
+            center: point,
+            radius: 3,
+            style: styles.text,
+            myClass: "Point",
+          });
+        },
+        arrowTip: function() {
+          return new Path({
+            segments: [new Point(-10,4), new Point(0,0), new Point(-10,-4)],
+            pivot: new Point(0,0),
+            style: styles.stroke,
+            applyMatrix: false,
+            locked: true,
+            data: {shouldRotate: true,},
+          });
+        },
+        tick: function() {
+          return new Path({
+            segments: [new Point(0,4), new Point(0,-4)],
+            style: styles.stroke,
+            applyMatrix: false,
+            locked: true,
+            data: {shouldRotate: true,},
+          });
+        },
+        lineFromTo: function(item1, item2) {
+          var point1 = helpers.boundaryPoint(item1, item2.position);
+          var point2 = helpers.boundaryPoint(item2, item1.position);
+          var lineSeg = new Path([point1, point2]);
+          lineSeg.data = {endpoints: [item1, item2]};
+          return lineSeg;
+        },
+        arrow: null,
+        mapsTo: null,
+        label: function(text, point) {
+          var myText = new PointText({
+            point: basics.origin,
+            content: text,
+            style: styles.text,
+            justification: "center",
+          });
+          myText.position = point;
+          return myText;
+        },
+      };
+      var helpers = {
+        // Move some of these to an object called setters?
+        createBackground: function() {
+          var whiteBackground, grid, xAxis, yAxis, backGroup, backSymDef, backSym;
+          var backLayer = project.layers["backgroundLayer"];
+          if (!backLayer) {
+            backLayer = new Layer({name: "backgroundLayer"});
+            backLayer.sendToBack();
+          } else {
+            backLayer.removeChildren();
+          }
+          backLayer.activate();
+          whiteBackground = new Shape.Rectangle({
+            rectangle: view.bounds,
+            fillColor: "white",
+            strokeColor: "white",
+            locked: true,
+          });
+          grid = linalg.lineGrid(new Point(32,0), new Point(0,32), view.bounds);
+          xAxis = new Path.Line(new Point(0,view.bounds.top), new Point(0,view.bounds.bottom));
+          yAxis = new Path.Line(new Point(view.bounds.left,0), new Point(view.bounds.right,0));
+          xAxis.style = yAxis.style = {
+            strokeColor: "black",
+            strokeWidth: 3,
+            strokeScaling: false,
+          };
+          backSymDef = new SymbolDefinition(new Group(whiteBackground, grid, xAxis, yAxis));
+          backSym = backSymDef.place(view.bounds.center);
+          backLayer.sendToBack();
+          backLayer.locked = true;
+        },
+        boundaryPoint: function(item, pt2, args) {
+          if (item.className === "Point") return item;
+          if (item.bounds.contains(pt2)) return pt2;
+          var boundPath = new Path.Rectangle(item.bounds);
+          var padding = (args && args.padding) ? args.padding : new Size(10,10);
+          boundPath.scale((item.bounds.size + padding)/item.bounds.size);
+          var line = new Path.Line(item.position, pt2);
+          var intersections = boundPath.getIntersections(line);
+          boundPath.remove();
+          line.remove();
+          return (intersections[0] ? intersections[0].point : item.position);
+        },
+        getPathPoint: function(hitRes) {
+          var type = hitRes.type;
+          if (type === "handle-in") {
+            return hitRes.segment["_handleIn"];
+          } else if (type === "handle-out") {
+            return hitRes.segment["_handleOut"];
+          } else if (type === "stroke" || type === "curve") {
+            var location = hitRes.location;
+            var seg = hitRes.item.insert(location.index + 1, hitRes.point);
+            seg.smooth();
+            return seg;
+          } else if (type === "segment") {
+            return hitRes.segment;
+          } else if (type === "fill"){
+            return hitRes.item;
+          } else {
             return null;
           }
-          var hist = target.data.history;
-          index = (index < 0) ? 0 : (index >= hist.length) ? hist.length : index;
-          var state = hist[index];
-          if (target.importState) {
-            target.importState(index);
+        },
+        updateEndpoints: function(edge) {
+          if (!edge.data.endpoints) return;
+          edge.firstSegment.point = helpers.boundaryPoint(edge.data.endpoints[0], edge.firstSegment.next.point);
+          edge.lastSegment.point = helpers.boundaryPoint(edge.data.endpoints[1], edge.lastSegment.previous.point);
+        },
+        updateDecor: function(decor) {
+          if (!decor.data.curveTime || decor.parent.myClass !== "Wrapper") {
+            return false;
           }
-          // If the index is greater than the history length, use the last index.
-
-          // If the target item has a special load function, use that.
-          // Else if the state is a JSON, import it to the target item.
-          // Else if the state is an object, loop through the keys (IDs of children).
-          // If no child with the given ID exists, create and add it.
-          // If the associated value is a JSON, import it. (This shouldn't happen.)
-          // Else if it is an integer, recursively use load state on the child and integer.
+          var owner = decor.parent.firstChild;
+          var shift = decor.data.shift ? decor.data.shift : new Point(0,0);
+          if (decor.data.curveTime) {
+            decor.position = owner.getPointAt(decor.data.curveTime*owner.length) + shift;
+            if (decor.data.shouldRotate) {
+              var rotationPrev = decor.rotation;
+              var vec = owner.getTangentAt(decor.data.curveTime*owner.length);
+              decor.rotate(vec.angle - rotationPrev);
+            }
+          }
+        },
+        addDependency: function(owner, decor, args) {
+          var point, wrapper;
+          if (owner.parent.myClass === "Wrapper") {
+            wrapper = owner.parent;
+          } else {
+            wrapper = owner.replaceWith(new Group({
+              children: [owner],
+              myClass: "Wrapper",
+            }));
+          }
+          Object.assign(decor.data, args);
+          decor.addTo(wrapper);
+          if (decor.data.curveTime) {
+            helpers.updateDecor(decor);
+          }
+          return decor; // Or wrapper?
+        }, // Add to wrapper?
+        updateAllDecor: function(path) {
+          var wrapper = path.parent;
+          if (wrapper.myClass !== "Wrapper") return;
+          for (var i=1; i < wrapper.children.length; i++) {
+            helpers.updateDecor(wrapper.children[i]);
+          }
         },
         linearLayour: function() { // Not implemented.
           return;
         },
         toDisplayString: function(item) {
-          if (item.children) {
+          if (item.className === "Layer") { // item.children
             for (var i=0; i<item.children.length; i++) {
               helpers.toDisplayString(item.children[i]);
             }
           } else {
-            var myType = item.data.type ? item.data.type : item.className;
-            var dispString = myType + " (@" + item.id +")";
+            var myType = item.data.myClass ? item.data.myClass : item.className;
+            var dispString = myType + " (id=" + item.id +")";
             if (item.className === "PointText") {
               dispString += ": " + item.content;
             }
             globals.newCalcEntry(item.id, dispString);
+            // return dispString;
           }
+        },
+        getBaseItem: function(item) {
+          if (item.myClass === "Wrapper") return item.firstChild;
+          if (item.parent.myClass === "Wrapper") return item.parent.firstChild;
+          return item;
         },
       };
       var handlers = {
@@ -330,20 +356,19 @@
           if (!activeItem) {
             return;
           }
+          view.element.style.cursor = "grabbing";
           if (activeItem.className === "Segment") {
             activeItem.point += event.delta;
-            helpers.updateAllDependents(activeItem.path);
-            activeItem.smooth();
+            helpers.updateEndpoints(activeItem.path);
+            helpers.updateAllDecor(activeItem.path);
           } else if (activeItem.className === "Point") {
+            // Handles.
             activeItem.x += event.delta.x;
             activeItem.y += event.delta.y;
-            helpers.updateAllDependents(activeItem._owner.path);
+            helpers.updateEndpoints(activeItem._owner.path);
+            helpers.updateAllDecor(activeItem._owner.path);
           } else {
             activeItem.position += event.delta;
-          }
-          var toUpdate = activeItem.path ? activeItem.path : activeItem;
-          if (toUpdate.data && toUpdate.data.dependents) {
-            helpers.updateAllDependents(toUpdate);
           }
         },
         dragToDraw: function(event) {
@@ -388,49 +413,6 @@
           if (hitResult) hitResult.item.selected = true;
         },
       };
-      var basics = {
-        hitOptions: {
-          fill: true,
-          stroke: true,
-          segments: true,
-          bounds: true,
-          center: true,
-          handles: true,
-          tolerance: 5,
-        },
-        oppositeCorners: {
-          "top-center": "bottomCenter",
-          "bottom-center": "topCenter",
-          "right-center": "leftCenter",
-          "left-center": "rightCenter",
-          "top-left": "bottomRight",
-          "top-right": "bottomLeft",
-          "bottom-right": "topLeft",
-          "bottom-left": "topRight",
-        },
-      };
-      var styles = {
-        text: {
-          fillColor: "black",
-          strokeColor: "null",
-          strokeWidth: 1,
-          dashArray: null,
-          fontFamily: "Arial",
-          strokeJoin: "round",
-        },
-        stroke: {
-          fillColor: null,
-          strokeColor: "black",
-          strokeWidth: 1,
-        },
-        sketch: {
-          fillColor: null,
-          strokeColor: "black",
-          strokeWidth: 3,
-          dashArray: null,
-          strokeCap: "round",
-        },
-      };
       var diagrams = {
         snake: [["", "0", "0", "0", ""],
                                  ["0", "ker(a)", "ker(b)", "ker(c)", ""],
@@ -447,6 +429,26 @@
                          [null, "0", "0", "0", null]
                        ],
       };
+      function onResize(event) {
+        helpers.createBackground();
+      }
+      function newGraph(args) {
+        // Args: nodeValues, edgeValues, labelValues
+      	var nodes = new Group({name: "nodes"});
+        var edges = new Group({name: "edges"});
+        var g = new Group({
+          children: [nodes, edges],
+          data: {
+            myClass: "Graph",
+            nodes: nodes.children,
+            edges: edges.children,
+            nodeValues: args ? args.nodeValues : null, // Args: symbol, mouseEvents
+            edgeValues: args ? args.edgeValues : null, // Args: style, isDirected, arrowFill, arrowSize, hasCrossbars
+            labelValues: args ? args.labelValues : null, // Args: style, locked, defaultShift
+          },
+        });
+      	return g;
+      }
       var modeSetters = {
         default: function() {
           tool.onMouseMove = function(event) {
@@ -460,17 +462,32 @@
         draw: function() {
           contentLayer.activate();
           view.element.style.cursor = "crosshair";
-          project.currentStyle = styles.sketch;
-          globals.styleControls(0, project.currentStyle);
+          globals.styleControls(0, styles.sketch);
           tool.onMouseDown = function(event) {
-            activeItem = new Path([event.point]);
-            activeItem.data.bendable = true;
+            if (event.modifiers.shift && activeItem) {
+              var compound = new CompoundPath(activeItem);
+              activeItem = new Path([event.point]);
+              compound.addChild(activeItem);
+            } else {
+              project.deselectAll();
+              activeItem = new Path({
+                segments: [],
+                style: styles.sketch,
+              });
+              // Drawing on a torus!
+              var newSymDef = new SymbolDefinition(activeItem);
+              var newStamp = newSymDef.place(new Point(-50,-200));
+              contentLayer.addChild(activeItem);
+            }
+            activeItem.data.bendable = true; // May be unnecessary.
             tool.onMouseUp = function(event) {
-              if (!activeItem) return;
-              if ((event.point - activeItem.firstSegment.point).length < 10) {
+              if (!activeItem || !activeItem.firstSegment) return;
+              if ((event.point - activeItem.firstSegment.point).length < 15) {
                 activeItem.closePath();
               }
               activeItem.simplify(5);
+              // Deselect on move, unless shift is held.
+              activeItem.selected = true;
             };
           };
           tool.onMouseMove = null;
@@ -492,89 +509,93 @@
           };
           tool.onMouseMove = handlers.moveToSelect;
           tool.onMouseDrag = null;
-        }
+        },
+        magic: function() {
+          console.log("Magic!");
+        },
+        edge: function() {
+          project.currentStyle = styles.stroke;
+          tool.onMouseMove = function(event) {
+            hitResult = contentLayer.hitTest(event.point, basics.hitOptions);
+            if (!hitResult || hitResult.item.className === "Group") {
+              view.element.style.cursor = "default";
+              return;
+            }
+            view.element.style.cursor = "pointer";
+          };
+          tool.onMouseDown = function(event) {
+            hitResult = contentLayer.hitTest(event.point, basics.hitOptions);
+            if (!hitResult || hitResult.item.className === "Group") {
+              return;
+            }
+            var tempLine = new Path.Line(event.point, event.point);
+            tool.onMouseDrag = function(event) {
+              tempLine.lastSegment.point = event.point;
+            };
+            tempLine.removeOn({up: true});
+          };
+        },
+        scan: function() {
+          tool.onMouseDown = function(event) {
+            console.log(event.point);
+          }
+        },
       };
       function defaultMode(event, isDown) {
         project.deselectAll();
         hitResult = project.hitTest(event.point, basics.hitOptions);
+        activeItem = null;
         if (hitResult) {
+          var item = hitResult.item;
+          var type = hitResult.type;
           if (isDown) console.log(hitResult.type);
-           if (hitResult.type === "bounds" && hitResult.item.data.resizeable) {
-            if (hitResult.name === "top-center" || hitResult.name === "bottom-center") {
-              view.element.style.cursor = "ns-resize";
-            } else if (hitResult.name === "right-center" || hitResult.name === "left-center") {
-              view.element.style.cursor = "ew-resize";
-            } else if (hitResult.name === "bottom-right" || hitResult.name === "top-left") {
-              view.element.style.cursor = "nwse-resize";
-            } else if (hitResult.name === "top-right" || hitResult.name === "bottom-left") {
-              view.element.style.cursor = "nesw-resize";
-            }
+          if (type === "bounds") {
+            if (!(item.className === "Shape" || item.className === "Raster")) return;
+            view.element.style.cursor = basics.resizeCursor[globals.toCamelCase(hitResult.name)];
             if (isDown) {
-              activeItem = hitResult.item; // Currently not being used.
+              activeItem = item;
               tool.onMouseDrag = function(event) {
                 handlers.dragToResize(event);
               };
-              //tool.onMouseUp = handlers.clearVariables;
             }
-          } else if (hitResult.item && (hitResult.item.data.shiftable || hitResult.item.data.bendable)) {
-            if (hitResult.item.data.bendable) {
-              hitResult.item.selected = true;
+          } else {
+            item.selected = true;
+            view.element.style.cursor = "grab";
+            tool.onMouseDrag = handlers.dragToMove;
+            tool.onMouseUp = handlers.upToClear;
+            if (item.className === "Path") {
               if (event.modifiers.alt) {
-                hitResult.item.fullySelected = true;
+                item.fullySelected = true;
               }
-            }
-
-            if (isDown) {
-              view.element.style.cursor = "grabbing";
-              if (hitResult.type === "handle-in" || hitResult.type === "handle-out") {
-                //if (!event.modifiers.alt) return;
-                if (hitResult.type === "handle-in") {
-                  activeItem = hitResult.segment["_handleIn"];
-                } else {
-                  activeItem = hitResult.segment["_handleOut"];
-                }
-              } else if (hitResult.type === "stroke" && hitResult.item.data.bendable) {
-                var location = hitResult.location;
-          			activeItem = hitResult.item.insert(location.index + 1, event.point);
-                activeItem.smooth();
-              } else if (hitResult.type === "segment" && hitResult.item.data.bendable) {
-                activeItem = hitResult.segment;
-              } else {
-                activeItem = hitResult.item;
+              if (isDown) {
+                activeItem = helpers.getPathPoint(hitResult);
               }
-              tool.onMouseDrag = handlers.dragToMove;
-              //tool.onMouseUp = handlers.clearVariables;
-            } else {
-              view.element.style.cursor = "grab";
+            } else if (item.className !== "Group") {
+              if (isDown) activeItem = item;
             }
           }
         } else {
           view.element.style.cursor = "default";
         }
       }
+
       function loadCanvas() {
+        var shiftBy = (view.bounds.center + view.bounds.bottomLeft)/2;
+        view.transform(new Matrix(1,0,0,1,shiftBy.x,shiftBy.y));
         contentLayer = new Layer({name: "content"});
-        var myRect = protos.rect.clone().set({
-          fillColor: "yellow",
-          position: new Point(200,200),
-          scaling: new Size(80,100)
+        var myGraph = newGraph({edgeValues: {isDirected: true,},});
+        var node1 = myGraph.children["nodes"].addChild(draw.label("N1", new Point(80, -250)));
+        var node2 = myGraph.children["nodes"].addChild(draw.label("N2", new Point(130, -250)));
+        //myGraph.addEdge(node1, node2);
+        var myShape = new Shape.Rectangle({
+          from: new Point(-100,-100),
+          to: new Point(-50,-50),
+          fillColor: basics.colorHSLa,
+          radius: 10,
+          strokeScaling: false,
         });
-        var myDot = protos.disc.clone().set({
-          fillColor: "green",
-          strokeWidth: 3,
-          position: new Point(200,100),
-          scaling: new Size(10,10),
-        });
-        var graph, node1, node2;
-        contentLayer.addChildren([myRect, myDot]);
-
-        helpers.saveState(contentLayer);
+        //console.log(myGraph.exportJSON());
         helpers.toDisplayString(contentLayer);
-
-        myGraph = newGraph({edgeValues: {isDirected: true,},});
-        node1 = myGraph.addNode(new Point(400,200), "N1");
-        node2 = myGraph.addNode(new Point(480, 200), "N2");
-        myGraph.addEdge(node1, node2);
       }
       Object.assign(globals, {
         setMode: function(mode) {
@@ -598,7 +619,7 @@
           var item = project.getItem({id: id});
           item.set(props);
         },
-        colorHSL: protos.colorHSLa,
+        colorHSL: basics.colorHSLa,
         zoomCanvas: function() {
           console.log("Zoom canvas - not implmented");
           for (var i=0; i < project.layers.length; i++) {
@@ -611,135 +632,6 @@
       });
       loadCanvas();
       globals.setMode("default");
-
-      function onResize(event) {
-        helpers.createBackground();
-      }
-
-      function newGraph(args) {
-        // Args: nodeValues, edgeValues, labelValues
-      	var nodes = new Group({name: "nodes"});
-        var edges = new Group({name: "edges"});
-        var g = new Group({
-          children: [nodes, edges],
-          addNode: function(point, label) {
-            var newNode, newLabel;
-            var nodeSym = this.data.nodeValues ? this.data.nodeValues.symbol : null;
-            var shift = this.data.defaultShift ? this.data.defaultShift : new Point(0,0);
-            if (label) {
-              newLabel = new PointText({
-                point: point + shift,
-                content: label,
-                justification: "center",
-                data: {shiftable: true,},
-                style: (this.data.labelValues && this.data.labelValues.style) ?
-                        this.data.labelValues.style : styles.text,
-              });
-            }
-            if (nodeSym) {
-              newNode = nodeSym.place(point); // Or clone path.
-              var decor = helpers.addDependency(newNode, newLabel, {}); // {offset: shift}
-              this.addChild(decor);
-            } else if (newLabel) {
-              newNode = newLabel;
-            } else {
-              return false;
-            }
-            newNode.data.label = newLabel;
-            newNode.data.graph = this;
-            this.children["nodes"].addChild(newNode);
-            return newNode;
-          },
-          getNodeAt: function(point, tolerance, args) {
-            var tol = tolerance ? tolerance : 20;
-            var nodeHit = this.children["nodes"].hitTest(point, {
-              tolerance: tol,
-              fill: true,
-              stroke: true,
-            });
-            if (!nodeHit || !nodeHit.item) {
-              return null;
-            }
-            var retItem = nodeHit.item;
-            if (retItem.name === "nodes") {
-              return null;
-            }
-            return retItem;
-          },
-          addEdge: function(node1, node2) { // Too much packaged here.
-            var nodes = [node1, node2];
-            var nodeGrp = this.children["nodes"];
-            if (!node1.isDescendant(nodeGrp) || !node2.isDescendant(nodeGrp)) {
-              return;
-            }
-            project.currentStyle = (this.data.edgeValues && this.data.edgeValues.style) ?
-              this.data.edgeValues.style : styles.stroke;
-            var newEdge = helpers.lineFromTo(node1, node2);
-            if (this.data.edgeValues && this.data.edgeValues.isDirected) {
-              var decor = helpers.addDependency(newEdge, protos.arrow.clone(), {curveTime: 1});
-              decor.style = project.currentStyle;
-              if (this.data.edgeValues && this.data.edgeValues.arrowFill) {
-                decor.fillColor = decor.strokeColor;
-              }
-              this.addChild(decor);
-              decor.bringToFront();
-              if (this.data.edgeValues && this.data.edgeValues.hasCrossbars) {
-                var decor = helpers.addDependency(newEdge, protos.tick.clone(), {curveTime: 0});
-                decor.style = project.currentStyle;
-                this.addChild(decor);
-                decor.bringToFront();
-              }
-            }
-            newEdge.data.endpoints = [node1, node2]; // Redundant.
-            newEdge.data.n1 = node1;
-            newEdge.data.n2 = node2;
-            helpers.updateDependency(newEdge);
-            for (var i=0; i<2; i++) {
-              if (!nodes[i].data.dependents) {
-                nodes[i].data.dependents = [];
-              }
-              nodes[i].data.dependents.push(newEdge);
-            }
-            newEdge.firstSegment.locked = true;
-            newEdge.lastSegment.locked = true;
-            newEdge.data.bendable = true;
-            this.children["edges"].addChild(newEdge);
-            return newEdge;
-          },
-          updateEdges: function(node) {
-            var g = this;
-            var edge;
-            var incomingEdges = g.children["edges"].getItems({
-              data: {
-                n1: node,
-              }
-            });
-            var outgoingEdges = g.children["edges"].getItems({
-              data: {
-                n2: node,
-              }
-            });
-            for (var i=0; i < incomingEdges.length; i++) {
-              edge = incomingEdges[i];
-              helpers.updateDependency(edge);
-              helpers.updateAllDependents(edge);
-            }
-            for (var i=0; i < incomingEdges.length; i++) {
-              edge = outgoingEdges[i];
-              helpers.updateDependency(edge);
-              helpers.updateAllDependents(edge);
-            }
-          },
-          data: {
-            nodes: nodes.children,
-            edges: edges.children,
-            nodeValues: args ? args.nodeValues : null, // Args: symbol, mouseEvents
-            edgeValues: args ? args.edgeValues : null, // Args: style, isDirected, arrowFill, arrowSize, hasCrossbars
-            labelValues: args ? args.labelValues : null, // Args: style, locked, defaultShift
-          },
-        });
-      	return g;
-      }
     </script>
     <script type="text/javascript" src="calculator-display.js"></script>
   </head>
